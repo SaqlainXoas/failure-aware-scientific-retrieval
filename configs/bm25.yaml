@@ -1,3 +1,7 @@
-# Stub config for the BM25 pipeline. Populated with real parameters in Phase 2.
+# BM25 first-stage retrieval (bm25s, library-default k1/b — not tuned).
 pipeline: bm25
+dataset: beir/scifact
 seed: 42
+splits_dir: splits
+device: auto
+candidate_depth: 100

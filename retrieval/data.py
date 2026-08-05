@@ -74,6 +74,46 @@ def read_split_file(path: str | Path) -> list[str]:
     return [line.strip() for line in Path(path).read_text().splitlines() if line.strip()]
 
 
+_SPLIT_FILES = {
+    "calibration-dev": "calibration_dev.txt",
+    "calibration-train": "calibration_train.txt",
+}
+
+
+def resolve_split(split_arg: str, train_data: dict[str, Any], splits_dir: str | Path = SPLITS_DIR) -> dict[str, Any]:
+    """Filters the full train split's queries/qrels down to one calibration split's query IDs.
+
+    The test split stays untouched until later phases (plan §5 leakage rules), so only
+    calibration-dev/calibration-train are recognized here.
+    """
+    if split_arg not in _SPLIT_FILES:
+        raise ValueError(
+            f"Unknown split '{split_arg}'; expected one of {sorted(_SPLIT_FILES)}"
+        )
+    query_ids = set(read_split_file(Path(splits_dir) / _SPLIT_FILES[split_arg]))
+    return {
+        "corpus": train_data["corpus"],
+        "queries": {qid: text for qid, text in train_data["queries"].items() if qid in query_ids},
+        "qrels": {qid: grades for qid, grades in train_data["qrels"].items() if qid in query_ids},
+    }
+
+
+def resolve_device(requested: str = "auto") -> str:
+    """auto -> mps if available else cpu; mps/cpu are validated and passed through."""
+    import torch
+
+    if requested not in ("auto", "mps", "cpu"):
+        raise ValueError(f"Unknown device '{requested}'; expected auto|mps|cpu")
+    if requested == "cpu":
+        return "cpu"
+    mps_available = torch.backends.mps.is_available()
+    if requested == "mps":
+        if not mps_available:
+            raise RuntimeError("device: mps requested but MPS is not available on this machine")
+        return "mps"
+    return "mps" if mps_available else "cpu"
+
+
 def validate_calibration_splits(
     train_ids: list[str], dev_ids: list[str], evaluable_ids: list[str]
 ) -> None:

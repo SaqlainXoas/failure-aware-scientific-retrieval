@@ -1,0 +1,13 @@
+# Hybrid first-stage retrieval: Reciprocal Rank Fusion of top-100 BM25 + top-100 dense BGE,
+# k=60 fixed (not tuned).
+pipeline: hybrid_rrf
+dataset: beir/scifact
+seed: 42
+splits_dir: splits
+device: auto
+candidate_depth: 100
+rrf_k: 60
+model_name: BAAI/bge-small-en-v1.5
+model_revision: 5c38ec7c405ec4b44b94cc5a9bb96e735b38267a
+query_instruction: "Represent this sentence for searching relevant passages: "
+batch_size: 32
