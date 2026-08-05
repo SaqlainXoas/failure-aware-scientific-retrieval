@@ -5,9 +5,11 @@ import pytest
 from retrieval.confidence import (
     COMMON_FEATURES,
     HYBRID_FEATURES,
+    apply_raw_score_calibrator,
     confidence_metrics,
     extract_features,
     fit_calibrator,
+    fit_raw_score_calibrator,
     predict_proba,
     raw_baseline_scores,
     risk_coverage_curve,
@@ -219,11 +221,38 @@ def test_confidence_metrics_single_class_returns_none_not_error():
     assert metrics["brier"] is not None
 
 
-def test_select_thresholds_full_coverage_is_min_score():
-    probs = {"q1": 0.9, "q2": 0.5, "q3": 0.1}
+def test_confidence_metrics_refuses_brier_for_non_probability_scores():
+    # plan §9: the raw reranker score is not a probability, so Brier is withheld rather than
+    # computed on a rescaled stand-in. AUROC/AUPRC are rank-based and stay available.
+    scores = {"q1": 7.2, "q2": -3.1, "q3": 0.4}
     labels = {"q1": True, "q2": False, "q3": True}
 
-    thresholds = select_thresholds(probs, labels, coverage_levels=(1.0,))
+    metrics = confidence_metrics(scores, labels, is_probability=False)
+
+    assert metrics["brier"] is None
+    assert metrics["is_probability"] is False
+    assert metrics["auroc"] is not None
+    assert metrics["auprc"] is not None
+
+
+def test_raw_score_calibrator_produces_probabilities_and_preserves_ranking():
+    train_scores = {f"q{i}": float(i) for i in range(20)}
+    train_labels = {f"q{i}": i >= 10 for i in range(20)}
+    dev_scores = {"d1": 1.0, "d2": 9.0, "d3": 18.0}
+
+    calibrator = fit_raw_score_calibrator(train_scores, train_labels)
+    probs = apply_raw_score_calibrator(calibrator, dev_scores)
+
+    assert set(probs) == set(dev_scores)
+    assert all(0.0 <= p <= 1.0 for p in probs.values())
+    # Platt scaling is monotone, so it must not reorder the queries.
+    assert sorted(probs, key=lambda q: probs[q]) == sorted(dev_scores, key=lambda q: dev_scores[q])
+
+
+def test_select_thresholds_full_coverage_is_min_score():
+    probs = {"q1": 0.9, "q2": 0.5, "q3": 0.1}
+
+    thresholds = select_thresholds(probs, coverage_levels=(1.0,))
 
     assert thresholds["1.0"] == pytest.approx(0.1)
 

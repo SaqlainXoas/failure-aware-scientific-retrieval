@@ -40,6 +40,26 @@ def test_tie_break_is_deterministic_by_doc_id():
     assert fused == fused_again
 
 
+def test_hybrid_retrieve_truncates_to_candidate_depth():
+    # The union of two 100-doc lists is up to 200 docs; hybrid must emit the same depth as
+    # bm25/dense so the Phase 4 within-query normalization uses one denominator everywhere.
+    bm25_rows = [
+        {"query_id": "q1", "doc_id": f"a{i}", "rank": i, "score": 1.0 / i} for i in range(1, 11)
+    ]
+    dense_rows = [
+        {"query_id": "q1", "doc_id": f"b{i}", "rank": i, "score": 1.0 / i} for i in range(1, 11)
+    ]
+
+    untruncated = hybrid_retrieve(bm25_rows, dense_rows, k=60)
+    truncated = hybrid_retrieve(bm25_rows, dense_rows, k=60, top_k=10)
+
+    assert len(untruncated) == 20  # disjoint lists fuse to the full union
+    assert len(truncated) == 10
+    assert [row["rank"] for row in truncated] == list(range(1, 11))
+    # Truncation keeps the highest-scoring prefix, it does not reorder.
+    assert [row["doc_id"] for row in truncated] == [row["doc_id"] for row in untruncated[:10]]
+
+
 def test_hybrid_retrieve_schema_and_fusion():
     bm25_rows = [
         {"query_id": "q1", "doc_id": "a", "rank": 1, "score": 5.0},

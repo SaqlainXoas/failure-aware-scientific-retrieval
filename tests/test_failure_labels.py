@@ -116,3 +116,50 @@ def test_decomposition_metrics_zero_opportunity_edge_case():
     labels = ["no_opportunity"] * 4
     metrics = decomposition_metrics(labels)
     assert metrics["conditional_conversion_rate"] == 0.0
+
+
+def test_decomposition_counts_sum_to_query_count():
+    # Phase 3 spec AC 3: transition labels must partition the query set, and the saved
+    # artifact has to make that checkable rather than only exposing rates.
+    labels = (
+        ["already_successful"] * 7
+        + ["rescued_by_reranker"] * 3
+        + ["degraded_by_reranker"] * 2
+        + ["unchanged_failure"] * 4
+        + ["no_opportunity"] * 9
+    )
+    metrics = decomposition_metrics(labels)
+
+    assert set(metrics["counts"]) == set(CATEGORIES)
+    assert sum(metrics["counts"].values()) == len(labels)
+    assert metrics["n_queries"] == len(labels)
+    assert metrics["candidate_set_failure_rate"] + metrics["reranking_failure_rate"] + metrics[
+        "final_success_rate"
+    ] == pytest.approx(1.0)
+
+
+def test_share_of_failures_from_candidate_set():
+    # The plan §23 headline quantity: of everything that failed, how much the reranker
+    # never had a chance to fix. 5 no_opportunity out of 5 + 1 + 2 = 8 total failures.
+    labels = (
+        ["no_opportunity"] * 5
+        + ["degraded_by_reranker"] * 1
+        + ["unchanged_failure"] * 2
+        + ["already_successful"] * 10
+    )
+    metrics = decomposition_metrics(labels)
+
+    assert metrics["n_final_failures"] == 8
+    assert metrics["share_of_failures_from_candidate_set"] == pytest.approx(5 / 8)
+
+
+def test_share_of_failures_is_zero_when_nothing_failed():
+    metrics = decomposition_metrics(["already_successful"] * 3)
+
+    assert metrics["n_final_failures"] == 0
+    assert metrics["share_of_failures_from_candidate_set"] == 0.0
+
+
+def test_decomposition_rejects_unknown_transition_label():
+    with pytest.raises(ValueError, match="Unknown transition"):
+        decomposition_metrics(["already_successful", "not_a_real_transition"])

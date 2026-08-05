@@ -1,8 +1,8 @@
 """Integration tests against the real SciFact dataset via ir_datasets.
 
-Requires network on first run (ir_datasets caches under ~/.ir_datasets/ after).
-Excluded from the default `uv run pytest` run — run explicitly with
-`uv run pytest -m integration`.
+These run as part of the default `uv run pytest` (plan §16 requires the split and
+leakage checks); they skip, rather than fail, when the dataset is unreachable — see
+`tests/conftest.py`. The offline structural split checks live in `tests/test_splits.py`.
 """
 
 import pytest
@@ -11,7 +11,6 @@ from retrieval.data import (
     evaluable_query_ids,
     generate_calibration_split,
     load_or_build_calibration_splits,
-    load_scifact_split,
     read_split_file,
     write_split_file,
 )
@@ -20,13 +19,13 @@ pytestmark = pytest.mark.integration
 
 
 @pytest.fixture(scope="module")
-def train_data():
-    return load_scifact_split("train")
+def train_data(scifact):
+    return scifact["train"]
 
 
 @pytest.fixture(scope="module")
-def test_data():
-    return load_scifact_split("test")
+def test_data(scifact):
+    return scifact["test"]
 
 
 @pytest.fixture(scope="module")
@@ -56,6 +55,17 @@ def test_split_generation_disjoint_and_reproducible(train_data):
     train_ids2, dev_ids2 = generate_calibration_split(ids, seed=42)
     assert train_ids == train_ids2
     assert dev_ids == dev_ids2
+
+
+def test_committed_split_files_match_seed_42_regeneration(
+    train_data, calibration_train_ids, calibration_dev_ids
+):
+    # The committed splits/*.txt must be exactly what seed 42 produces today; if this
+    # fails, either the files were hand-edited or the split policy changed silently.
+    ids = evaluable_query_ids(train_data["qrels"])
+    expected_train, expected_dev = generate_calibration_split(ids, seed=42)
+    assert calibration_train_ids == expected_train
+    assert calibration_dev_ids == expected_dev
 
 
 def test_split_ids_have_qrels_and_docs_exist(train_data, calibration_train_ids, calibration_dev_ids):

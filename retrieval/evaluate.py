@@ -7,6 +7,7 @@ returns 0.0 for every metric.
 """
 
 import math
+from typing import Any
 
 
 def recall_at_k(ranked_doc_ids: list[str], relevant_doc_ids: set[str], k: int) -> float:
@@ -98,29 +99,44 @@ def label_transition(
     return "unchanged_failure"
 
 
-def decomposition_metrics(labels: list[str]) -> dict[str, float]:
+def decomposition_metrics(labels: list[str]) -> dict[str, Any]:
     """Aggregates plan.md §10.2 failure-decomposition rates from per-query transition labels.
 
-    candidate_set_failure_rate / reranking_failure_rate / final_success_rate partition all
-    queries; conditional_conversion_rate is final success *among* queries with a candidate-set
-    opportunity (0.0, not a division error, when no query has one).
+    Every rate except the two below is denominated over *all* queries in the split:
+    candidate_set_failure_rate / reranking_failure_rate / final_success_rate partition them
+    exactly. The two conditional rates are named for their denominator —
+    conditional_conversion_rate is final success among queries with a candidate-set opportunity,
+    and share_of_failures_from_candidate_set is the fraction of *final failures* that the
+    reranker never had a chance to fix (the plan §23 headline quantity). Both return 0.0 rather
+    than raising when their denominator is empty.
+
+    Raw per-category counts and n_queries are returned alongside the rates so the
+    "transitions sum to the query count" invariant is checkable from the saved artifact.
     """
+    unknown = sorted(set(labels) - set(CATEGORIES))
+    if unknown:
+        raise ValueError(f"Unknown transition label(s): {unknown}")
+
     n = len(labels)
     counts = {category: labels.count(category) for category in CATEGORIES}
     n_opportunity = n - counts["no_opportunity"]
     n_final_success = counts["already_successful"] + counts["rescued_by_reranker"]
+    n_rerank_failure = counts["degraded_by_reranker"] + counts["unchanged_failure"]
+    n_final_failure = counts["no_opportunity"] + n_rerank_failure
 
     def rate(numerator: int, denominator: int) -> float:
         return numerator / denominator if denominator else 0.0
 
     return {
         "candidate_set_failure_rate": rate(counts["no_opportunity"], n),
-        "reranking_failure_rate": rate(
-            counts["degraded_by_reranker"] + counts["unchanged_failure"], n
-        ),
+        "reranking_failure_rate": rate(n_rerank_failure, n),
         "final_success_rate": rate(n_final_success, n),
         "opportunity_rate": rate(n_opportunity, n),
         "rescue_rate": rate(counts["rescued_by_reranker"], n),
         "degradation_rate": rate(counts["degraded_by_reranker"], n),
         "conditional_conversion_rate": rate(n_final_success, n_opportunity),
+        "share_of_failures_from_candidate_set": rate(counts["no_opportunity"], n_final_failure),
+        "counts": counts,
+        "n_queries": n,
+        "n_final_failures": n_final_failure,
     }

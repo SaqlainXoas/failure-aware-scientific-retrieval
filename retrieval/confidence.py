@@ -53,7 +53,12 @@ def _reranker_features(reranked_docs: list[dict]) -> dict[str, float]:
 def _first_stage_features(first_stage_docs: list[dict], reranked_docs: list[dict]) -> dict[str, float]:
     """First-stage score/rank features, within-query min-max normalized so BM25/cosine/RRF
     scales never need cross-pipeline comparison (plan §9). A constant candidate set (mx == mn)
-    normalizes to the uninformative midpoint 0.5 rather than dividing by zero."""
+    normalizes to the uninformative midpoint 0.5 rather than dividing by zero.
+
+    `first_stage_docs` is expected to already be scoped to the reranked candidate set (plan §9
+    says these features are computed "over the candidate set"); `extract_features` truncates to
+    rerank_depth before calling in, so the normalization denominator is the same depth for every
+    pipeline rather than whatever depth each retriever happened to emit."""
     scores = [row["score"] for row in first_stage_docs]
     if scores:
         mn, mx = min(scores), max(scores)
@@ -69,8 +74,8 @@ def _first_stage_features(first_stage_docs: list[dict], reranked_docs: list[dict
     shared_doc_ids = [row["doc_id"] for row in first_stage_docs if row["doc_id"] in reranked_rank_by_doc]
     if len(shared_doc_ids) >= 2:
         first_stage_rank_by_doc = {row["doc_id"]: row["rank"] for row in first_stage_docs}
-        first_ranks = [first_stage_rank_by_doc[doc_id] for doc_id in shared_doc_ids]
-        rerank_ranks = [reranked_rank_by_doc[doc_id] for doc_id in shared_doc_ids]
+        first_ranks = _dense_ranks([first_stage_rank_by_doc[doc_id] for doc_id in shared_doc_ids])
+        rerank_ranks = _dense_ranks([reranked_rank_by_doc[doc_id] for doc_id in shared_doc_ids])
         rank_correlation = _spearman(first_ranks, rerank_ranks)
     else:
         rank_correlation = 0.0
@@ -86,9 +91,20 @@ def _first_stage_features(first_stage_docs: list[dict], reranked_docs: list[dict
     }
 
 
+def _dense_ranks(ranks: list[int]) -> list[float]:
+    """Re-ranks values to a contiguous 1..n. Spearman is Pearson over *dense* ranks, so the
+    original positions have to be re-densified whenever the shared document set is a subset of
+    either list — otherwise the gaps distort the correlation."""
+    order = sorted(range(len(ranks)), key=lambda i: ranks[i])
+    dense = [0.0] * len(ranks)
+    for position, index in enumerate(order, start=1):
+        dense[index] = float(position)
+    return dense
+
+
 def _spearman(x: list[float], y: list[float]) -> float:
-    """Spearman rank correlation. Inputs here are already ranks (unique ints), so this
-    reduces to Pearson correlation over them; returns 0.0 for a degenerate (n<2) input."""
+    """Spearman rank correlation: Pearson correlation over dense ranks (see `_dense_ranks`).
+    Returns 0.0 for a degenerate (n<2 or zero-variance) input."""
     n = len(x)
     if n < 2:
         return 0.0
@@ -102,16 +118,14 @@ def _spearman(x: list[float], y: list[float]) -> float:
 
 
 def _hybrid_overlap_features(
-    query_id: str, raw_rows: dict[str, list[dict]], rerank_depth: int
+    bm25_docs: list[dict], dense_docs: list[dict], depth: int = 10
 ) -> dict[str, float]:
-    bm25_top10 = {
-        row["doc_id"] for row in raw_rows["bm25"] if row["query_id"] == query_id and row["rank"] <= 10
-    }
-    dense_top10 = {
-        row["doc_id"] for row in raw_rows["dense"] if row["query_id"] == query_id and row["rank"] <= 10
-    }
-    overlap = len(bm25_top10 & dense_top10)
-    return {"hybrid_bm25_dense_top10_overlap": overlap / 10.0}
+    """Fraction of the two retrievers' top-`depth` lists that agree — the plan §7/§9
+    hybrid-only exploratory feature. Reported as a fraction so it shares the [0,1] range of
+    the other normalized features."""
+    bm25_top = {row["doc_id"] for row in bm25_docs if row["rank"] <= depth}
+    dense_top = {row["doc_id"] for row in dense_docs if row["rank"] <= depth}
+    return {"hybrid_bm25_dense_top10_overlap": len(bm25_top & dense_top) / depth}
 
 
 def extract_features(
@@ -122,29 +136,32 @@ def extract_features(
 ) -> dict[str, dict[str, float]]:
     """Per-query feature dict keyed by query_id (plan.md §9 common feature set).
 
+    First-stage rows are truncated to `rerank_depth` first, so every feature is computed over
+    the candidate set the reranker actually saw and the within-query normalization uses the same
+    denominator for all three pipelines.
+
     `raw_rows` (the un-fused `{"bm25": [...], "dense": [...]}` rows) is required only to
     add the hybrid-only overlap feature; omit it for bm25/dense_bge pipelines.
     """
     first_stage_by_query = _rows_by_query(first_stage_rows)
     reranked_by_query = _rows_by_query(reranked_rows)
-
-    if raw_rows is not None:
-        bm25_by_query = _rows_by_query(raw_rows["bm25"])
-        dense_by_query = _rows_by_query(raw_rows["dense"])
-        indexed_raw_rows = {
-            "bm25": [row for rows in bm25_by_query.values() for row in rows],
-            "dense": [row for rows in dense_by_query.values() for row in rows],
-        }
+    bm25_by_query = _rows_by_query(raw_rows["bm25"]) if raw_rows is not None else {}
+    dense_by_query = _rows_by_query(raw_rows["dense"]) if raw_rows is not None else {}
 
     features_by_query: dict[str, dict[str, float]] = {}
-    for query_id, first_stage_docs in first_stage_by_query.items():
+    for query_id, all_first_stage_docs in first_stage_by_query.items():
+        first_stage_docs = all_first_stage_docs[:rerank_depth]
         reranked_docs = reranked_by_query.get(query_id, [])
         features = {
             **_first_stage_features(first_stage_docs, reranked_docs),
             **_reranker_features(reranked_docs),
         }
         if raw_rows is not None:
-            features.update(_hybrid_overlap_features(query_id, indexed_raw_rows, rerank_depth))
+            features.update(
+                _hybrid_overlap_features(
+                    bm25_by_query.get(query_id, []), dense_by_query.get(query_id, [])
+                )
+            )
         features_by_query[query_id] = features
     return features_by_query
 
@@ -153,6 +170,38 @@ def raw_baseline_scores(reranked_rows: list[dict]) -> dict[str, float]:
     """Top-1 reranker score per query — the plan §9 raw-score baseline. Not a probability."""
     by_query = _rows_by_query(reranked_rows)
     return {query_id: docs[0]["score"] if docs else 0.0 for query_id, docs in by_query.items()}
+
+
+def fit_raw_score_calibrator(scores: dict[str, float], labels_by_query: dict[str, bool]):
+    """Platt scaling of the raw top-1 reranker score: a one-feature LogisticRegression fitted
+    on calibration-train, giving the baseline a genuine probability so its Brier score is
+    comparable with the feature calibrator's.
+
+    Plan §9 forbids calling the raw score a probability, and §10.3/§10.4 still require Brier for
+    the baseline; fitting the transform on train (never on the split being scored) is what makes
+    those two compatible. AUROC/AUPRC are unchanged by this monotone transform, so the raw
+    ordering is still what the ranking metrics measure."""
+    from sklearn.linear_model import LogisticRegression
+    from sklearn.pipeline import Pipeline
+    from sklearn.preprocessing import StandardScaler
+
+    query_ids = sorted(scores)
+    X = [[scores[qid]] for qid in query_ids]
+    y = [labels_by_query[qid] for qid in query_ids]
+
+    pipeline = Pipeline(
+        [("scaler", StandardScaler()), ("classifier", LogisticRegression(max_iter=1000))]
+    )
+    pipeline.fit(X, y)
+    return pipeline
+
+
+def apply_raw_score_calibrator(calibrator, scores: dict[str, float]) -> dict[str, float]:
+    query_ids = sorted(scores)
+    X = [[scores[qid]] for qid in query_ids]
+    true_index = list(calibrator.classes_).index(True)
+    probs = calibrator.predict_proba(X)[:, true_index]
+    return {qid: float(p) for qid, p in zip(query_ids, probs)}
 
 
 def _feature_matrix(
@@ -197,7 +246,7 @@ def predict_proba(calibrator, features_by_query: dict[str, dict[str, float]], fe
 
 
 def select_thresholds(
-    probs: dict[str, float], labels: dict[str, bool], coverage_levels: tuple[float, ...] = (1.0, 0.8, 0.6)
+    probs: dict[str, float], coverage_levels: tuple[float, ...] = (1.0, 0.8, 0.6)
 ) -> dict[str, float]:
     """Score threshold per coverage level: keeping queries with score >= threshold covers
     (at least) that fraction of calibration-dev, selected on calibration-dev only."""
@@ -211,13 +260,16 @@ def select_thresholds(
     return thresholds
 
 
-def confidence_metrics(probs: dict[str, float], labels: dict[str, bool]) -> dict[str, float | None]:
+def confidence_metrics(
+    probs: dict[str, float], labels: dict[str, bool], is_probability: bool = True
+) -> dict[str, float | None]:
     """AUROC, AUPRC, Brier score. Returns None for AUROC/AUPRC if only one class is present
     (both are undefined in that case) rather than raising or silently returning a fake value.
 
-    Brier score requires inputs in [0,1]; the raw reranker-score baseline is not a probability
-    (plan §9), so its values are min-max normalized across this split only for the Brier
-    computation. AUROC/AUPRC are unaffected — they are rank-based and already scale-free."""
+    Brier is only defined for calibrated probabilities, so `is_probability=False` (the raw
+    reranker score, which plan §9 forbids treating as a probability) returns None for it rather
+    than rescaling the scores to fake a probability — use `fit_raw_score_calibrator` for a
+    baseline Brier. AUROC/AUPRC are rank-based and scale-free, so they are always reported."""
     from sklearn.metrics import average_precision_score, brier_score_loss, roc_auc_score
 
     query_ids = sorted(probs)
@@ -225,16 +277,11 @@ def confidence_metrics(probs: dict[str, float], labels: dict[str, bool]) -> dict
     y_score = [probs[qid] for qid in query_ids]
     single_class = len(set(y_true)) < 2
 
-    if y_score and (min(y_score) < 0.0 or max(y_score) > 1.0):
-        mn, mx = min(y_score), max(y_score)
-        y_score_for_brier = [(s - mn) / (mx - mn) if mx > mn else 0.5 for s in y_score]
-    else:
-        y_score_for_brier = y_score
-
     return {
         "auroc": None if single_class else roc_auc_score(y_true, y_score),
         "auprc": None if single_class else average_precision_score(y_true, y_score),
-        "brier": brier_score_loss(y_true, y_score_for_brier),
+        "brier": brier_score_loss(y_true, y_score) if is_probability else None,
+        "is_probability": is_probability,
         "n_queries": len(query_ids),
     }
 

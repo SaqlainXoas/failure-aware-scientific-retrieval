@@ -7,6 +7,7 @@ ascending, so callers (run.py, evaluate.py) never need pipeline-specific handlin
 
 import json
 from pathlib import Path
+from typing import Any
 
 import numpy as np
 
@@ -14,6 +15,17 @@ from retrieval.cache import cache_key, cache_path, corpus_fingerprint, load_or_c
 
 PREPROCESSING_VERSION = "v1"
 QUERY_INSTRUCTION = "Represent this sentence for searching relevant passages: "
+
+# Pinned explicitly rather than left to bm25s' defaults so the manifest can record them and
+# a future bm25s release cannot silently change tokenization (plan §6.1: tokenization must be
+# documented and identical across all BM25 runs). These values *are* bm25s 0.3.x's defaults,
+# so pinning them does not change any existing result or invalidate the cache.
+BM25_TOKENIZER = {
+    "lower": True,
+    "token_pattern": r"(?u)\b\w\w+\b",
+    "stopwords": "english",
+    "stemmer": None,
+}
 
 
 def _load_bm25_index(path: Path):
@@ -38,8 +50,14 @@ def bm25_retrieve(
     cache_dir: str | Path | None = None,
     force: bool = False,
     cache_hits: dict[str, bool] | None = None,
+    params_out: dict[str, Any] | None = None,
 ) -> list[dict]:
-    """BM25 (bm25s, library-default k1/b) over title+abstract corpus text; deterministic tokenization."""
+    """BM25 (bm25s, library-default k1/b) over title+abstract corpus text; deterministic tokenization.
+
+    `params_out`, when given, is filled with the scoring and tokenization parameters actually
+    used, so the caller can record concrete values in the run manifest (plan §6.1) instead of
+    an unresolvable "library default".
+    """
     import bm25s
 
     doc_ids = sorted(corpus)
@@ -47,7 +65,7 @@ def bm25_retrieve(
 
     def compute_index():
         texts = [corpus[doc_id] for doc_id in doc_ids]
-        corpus_tokens = bm25s.tokenize(texts, show_progress=False)
+        corpus_tokens = bm25s.tokenize(texts, show_progress=False, **BM25_TOKENIZER)
         index = bm25s.BM25()
         index.index(corpus_tokens, show_progress=False)
         return index, doc_ids
@@ -68,7 +86,25 @@ def bm25_retrieve(
     else:
         index, indexed_doc_ids = compute_index()
 
-    query_tokens = bm25s.tokenize([queries[qid] for qid in query_ids], show_progress=False)
+    if params_out is not None:
+        params_out.update(
+            {
+                "library": "bm25s",
+                "library_version": bm25s.__version__,
+                "k1": float(index.k1),
+                "b": float(index.b),
+                "delta": float(index.delta),
+                "method": index.method,
+                "idf_method": index.idf_method,
+                "tokenizer": dict(BM25_TOKENIZER),
+                "corpus_text_format": "<title>\\n<abstract>",
+                "preprocessing_version": PREPROCESSING_VERSION,
+            }
+        )
+
+    query_tokens = bm25s.tokenize(
+        [queries[qid] for qid in query_ids], show_progress=False, **BM25_TOKENIZER
+    )
     k = min(top_k, len(indexed_doc_ids))
     results = index.retrieve(query_tokens, corpus=indexed_doc_ids, k=k, show_progress=False)
 
@@ -209,8 +245,15 @@ def _rows_by_query(rows: list[dict]) -> dict[str, list[str]]:
     }
 
 
-def hybrid_retrieve(bm25_rows: list[dict], dense_rows: list[dict], k: int = 60) -> list[dict]:
-    """Reciprocal Rank Fusion of two top-100 rankings; rank-based, so raw BM25/dense score scales are irrelevant."""
+def hybrid_retrieve(
+    bm25_rows: list[dict], dense_rows: list[dict], k: int = 60, top_k: int | None = None
+) -> list[dict]:
+    """Reciprocal Rank Fusion of two top-100 rankings; rank-based, so raw BM25/dense score scales are irrelevant.
+
+    The fused list is truncated to `top_k` so hybrid emits the same candidate depth as bm25 and
+    dense. Depth has to match: the union of two 100-doc lists is up to 200 docs, and the Phase 4
+    within-query score normalization would otherwise use a different denominator for this pipeline.
+    """
     bm25_by_query = _rows_by_query(bm25_rows)
     dense_by_query = _rows_by_query(dense_rows)
     query_ids = sorted(set(bm25_by_query) | set(dense_by_query))
@@ -220,6 +263,8 @@ def hybrid_retrieve(bm25_rows: list[dict], dense_rows: list[dict], k: int = 60) 
         fused = reciprocal_rank_fusion(
             [bm25_by_query.get(query_id, []), dense_by_query.get(query_id, [])], k=k
         )
+        if top_k is not None:
+            fused = fused[:top_k]
         for rank, (doc_id, score) in enumerate(fused, start=1):
             rows.append({"query_id": query_id, "doc_id": doc_id, "rank": rank, "score": score})
     return rows
