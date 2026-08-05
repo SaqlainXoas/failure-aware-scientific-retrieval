@@ -1,0 +1,21 @@
+{
+  "seed": 42,
+  "train": {
+    "n_queries": 809,
+    "n_docs": 5183,
+    "n_qrels": 919
+  },
+  "test": {
+    "n_queries": 300,
+    "n_docs": 5183,
+    "n_qrels": 339
+  },
+  "train_evaluable_queries": 809,
+  "train_excluded_queries": 0,
+  "calibration_train": {
+    "n_queries": 647
+  },
+  "calibration_dev": {
+    "n_queries": 162
+  }
+}
