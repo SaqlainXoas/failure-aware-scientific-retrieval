@@ -11,10 +11,22 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+import joblib
 import yaml
 
+from retrieval.confidence import (
+    confidence_metrics,
+    extract_features,
+    fit_calibrator,
+    predict_proba,
+    raw_baseline_scores,
+    risk_coverage_curve,
+    select_thresholds,
+    selective_results_at_coverage,
+)
 from retrieval.data import load_config, load_scifact_split, resolve_device, resolve_split, setup_logging
 from retrieval.evaluate import decomposition_metrics, evaluate_query, label_transition
+from retrieval.plots import plot_risk_coverage
 from retrieval.rerank import rerank
 from retrieval.retrieve import bm25_retrieve, dense_retrieve, hybrid_retrieve
 
@@ -57,8 +69,10 @@ def _package_versions() -> dict[str, str | None]:
 
 def run_pipeline(
     config: dict[str, Any], data: dict[str, Any], device: str, force: bool
-) -> tuple[list[dict], dict[str, bool]]:
-    """Dispatches on config['pipeline'] and returns (rankings rows, cache-hit flags)."""
+) -> tuple[list[dict], dict[str, bool], dict[str, list[dict]] | None]:
+    """Dispatches on config['pipeline'] and returns (rankings rows, cache-hit flags,
+    raw per-retriever rows). raw_rows is only populated for hybrid_rrf (the un-fused
+    bm25/dense rows the confidence hybrid-overlap feature needs); None otherwise."""
     pipeline = config["pipeline"]
     corpus, queries = data["corpus"], data["queries"]
     candidate_depth = config.get("candidate_depth", 100)
@@ -89,14 +103,14 @@ def run_pipeline(
         )
 
     if pipeline == "bm25":
-        return run_bm25(), cache_hits
+        return run_bm25(), cache_hits, None
     if pipeline == "dense_bge":
-        return run_dense(), cache_hits
+        return run_dense(), cache_hits, None
     if pipeline == "hybrid_rrf":
         bm25_rows = run_bm25()
         dense_rows = run_dense()
         rows = hybrid_retrieve(bm25_rows, dense_rows, k=config.get("rrf_k", 60))
-        return rows, cache_hits
+        return rows, cache_hits, {"bm25": bm25_rows, "dense": dense_rows}
     raise ValueError(f"Unknown pipeline '{pipeline}'")
 
 
@@ -182,6 +196,65 @@ def compute_query_labels(
     return labels
 
 
+def confidence_feature_names(pipeline: str) -> list[str]:
+    from retrieval.confidence import COMMON_FEATURES, HYBRID_FEATURES
+
+    return COMMON_FEATURES + HYBRID_FEATURES if pipeline == "hybrid_rrf" else COMMON_FEATURES
+
+
+def run_confidence_features(
+    config: dict[str, Any],
+    rows: list[dict],
+    reranked_rows: list[dict],
+    raw_rows: dict[str, list[dict]] | None,
+    rerank_depth: int,
+) -> dict[str, dict[str, float]]:
+    return extract_features(rows, reranked_rows, rerank_depth, raw_rows=raw_rows)
+
+
+def run_calibration(
+    config: dict[str, Any],
+    device: str,
+    force: bool,
+    train_features: dict[str, dict[str, float]],
+    train_labels: dict[str, bool],
+    dev_features: dict[str, dict[str, float]],
+    dev_labels: dict[str, bool],
+    dev_reranked_rows: list[dict],
+) -> dict[str, Any]:
+    """Fits on calibration-train only; every selection/metric below is computed on
+    calibration-dev, never on train. Baseline and calibrated results are kept separate."""
+    feature_names = confidence_feature_names(config["pipeline"])
+    class_weight = config.get("confidence_class_weight")
+    coverage_levels = tuple(config.get("confidence_coverage_levels", [1.0, 0.8, 0.6]))
+
+    calibrator = fit_calibrator(train_features, train_labels, feature_names, class_weight=class_weight)
+    dev_calibrated_probs = predict_proba(calibrator, dev_features, feature_names)
+    dev_baseline_scores = raw_baseline_scores(dev_reranked_rows)
+
+    return {
+        "calibrator": calibrator,
+        "feature_names": feature_names,
+        "class_weight": class_weight,
+        "confidence_metrics": {
+            "baseline": confidence_metrics(dev_baseline_scores, dev_labels),
+            "calibrated": confidence_metrics(dev_calibrated_probs, dev_labels),
+        },
+        "thresholds": {
+            "baseline": select_thresholds(dev_baseline_scores, dev_labels, coverage_levels),
+            "calibrated": select_thresholds(dev_calibrated_probs, dev_labels, coverage_levels),
+        },
+        "selective_results": {
+            "baseline": selective_results_at_coverage(dev_baseline_scores, dev_labels, coverage_levels),
+            "calibrated": selective_results_at_coverage(dev_calibrated_probs, dev_labels, coverage_levels),
+        },
+        "risk_coverage": {
+            "baseline": risk_coverage_curve(dev_baseline_scores, dev_labels),
+            "calibrated": risk_coverage_curve(dev_calibrated_probs, dev_labels),
+        },
+    }
+
+
 def build_manifest(
     config: dict[str, Any],
     config_path: str,
@@ -189,6 +262,7 @@ def build_manifest(
     device: str,
     n_queries: int,
     cache_hits: dict[str, bool],
+    calibrated: bool = False,
 ) -> dict[str, Any]:
     manifest: dict[str, Any] = {
         "git_commit": _git_commit(),
@@ -217,6 +291,9 @@ def build_manifest(
     manifest["reranker_revision"] = config.get("reranker_revision")
     manifest["rerank_depth"] = config.get("rerank_depth")
     manifest["reranker_batch_size"] = config.get("reranker_batch_size")
+    manifest["confidence_feature_names"] = confidence_feature_names(config["pipeline"])
+    manifest["confidence_class_weight"] = config.get("confidence_class_weight")
+    manifest["calibrated"] = calibrated
     return manifest
 
 
@@ -235,6 +312,8 @@ def write_run_dir(
     reranked_metrics: dict[str, Any],
     labels: list[dict],
     decomposition: dict[str, Any],
+    confidence_features: list[dict],
+    calibration: dict[str, Any] | None = None,
 ) -> Path:
     timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H%M%S")
     split_slug = manifest["split"].replace(" ", "-")
@@ -249,6 +328,23 @@ def write_run_dir(
     (run_dir / "reranked_metrics.json").write_text(json.dumps(reranked_metrics, indent=2) + "\n")
     _write_jsonl(run_dir / "failure_labels.jsonl", labels)
     (run_dir / "decomposition_metrics.json").write_text(json.dumps(decomposition, indent=2) + "\n")
+    _write_jsonl(run_dir / "confidence_features.jsonl", confidence_features)
+
+    if calibration is not None:
+        joblib.dump(calibration["calibrator"], run_dir / "calibrator.joblib")
+        (run_dir / "confidence_metrics.json").write_text(
+            json.dumps(calibration["confidence_metrics"], indent=2) + "\n"
+        )
+        (run_dir / "thresholds.json").write_text(json.dumps(calibration["thresholds"], indent=2) + "\n")
+        (run_dir / "selective_results.json").write_text(
+            json.dumps(calibration["selective_results"], indent=2) + "\n"
+        )
+        (run_dir / "risk_coverage.json").write_text(json.dumps(calibration["risk_coverage"], indent=2) + "\n")
+        plot_risk_coverage(
+            calibration["risk_coverage"]["baseline"],
+            calibration["risk_coverage"]["calibrated"],
+            run_dir / "risk_coverage.png",
+        )
 
     return run_dir
 
@@ -263,7 +359,7 @@ def main(argv: list[str] | None = None) -> None:
     data = resolve_split(args.split, train_data, splits_dir=config.get("splits_dir", "splits"))
     device = resolve_device(config.get("device", "auto"))
 
-    rows, cache_hits = run_pipeline(config, data, device, args.force)
+    rows, cache_hits, raw_rows = run_pipeline(config, data, device, args.force)
     metrics = compute_metrics(rows, data["qrels"])
 
     rerank_depth = config.get("rerank_depth", 50)
@@ -271,18 +367,62 @@ def main(argv: list[str] | None = None) -> None:
     reranked_metrics = compute_metrics(reranked_rows, data["qrels"])
     labels = compute_query_labels(rows, reranked_rows, data["qrels"], rerank_depth)
     decomposition = decomposition_metrics([label["transition_label"] for label in labels])
+    features_by_query = run_confidence_features(config, rows, reranked_rows, raw_rows, rerank_depth)
+    confidence_features = [{"query_id": qid, **feats} for qid, feats in sorted(features_by_query.items())]
+
+    calibration = None
+    if args.split == "calibration-train":
+        dev_data = resolve_split("calibration-dev", train_data, splits_dir=config.get("splits_dir", "splits"))
+        dev_rows, dev_cache_hits, dev_raw_rows = run_pipeline(config, dev_data, device, args.force)
+        dev_reranked_rows, dev_rerank_cache_hits = run_reranking(config, dev_data, dev_rows, device, args.force)
+        dev_labels_list = compute_query_labels(dev_rows, dev_reranked_rows, dev_data["qrels"], rerank_depth)
+        dev_features_by_query = run_confidence_features(
+            config, dev_rows, dev_reranked_rows, dev_raw_rows, rerank_depth
+        )
+        train_labels = {label["query_id"]: label["final_success_10"] for label in labels}
+        dev_labels = {label["query_id"]: label["final_success_10"] for label in dev_labels_list}
+        calibration = run_calibration(
+            config,
+            device,
+            args.force,
+            features_by_query,
+            train_labels,
+            dev_features_by_query,
+            dev_labels,
+            dev_reranked_rows,
+        )
+        cache_hits = {**cache_hits, **rerank_cache_hits, **dev_cache_hits, **dev_rerank_cache_hits}
+    else:
+        cache_hits = {**cache_hits, **rerank_cache_hits}
 
     manifest = build_manifest(
-        config, args.config, args.split, device, metrics["n_queries"], {**cache_hits, **rerank_cache_hits}
+        config,
+        args.config,
+        args.split,
+        device,
+        metrics["n_queries"],
+        cache_hits,
+        calibrated=calibration is not None,
     )
     run_dir = write_run_dir(
-        config, manifest, rows, metrics, reranked_rows, reranked_metrics, labels, decomposition
+        config,
+        manifest,
+        rows,
+        metrics,
+        reranked_rows,
+        reranked_metrics,
+        labels,
+        decomposition,
+        confidence_features,
+        calibration=calibration,
     )
 
     logger.info("Wrote run directory %s", run_dir)
     logger.info("Metrics: %s", json.dumps(metrics, indent=2))
     logger.info("Reranked metrics: %s", json.dumps(reranked_metrics, indent=2))
     logger.info("Decomposition: %s", json.dumps(decomposition, indent=2))
+    if calibration is not None:
+        logger.info("Confidence metrics: %s", json.dumps(calibration["confidence_metrics"], indent=2))
 
 
 if __name__ == "__main__":
