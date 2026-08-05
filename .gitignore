@@ -14,3 +14,8 @@ docs/
 
 # Local agent instructions (not tracked)
 CLAUDE.md
+
+# Retrieval run outputs and disk cache (regenerable, not tracked)
+runs/*
+!runs/.gitkeep
+.cache/
