@@ -7,6 +7,7 @@ only to select display thresholds and report metrics, never to fit anything.
 """
 
 import statistics
+from collections.abc import Callable
 from typing import Any
 
 FIRST_STAGE_FEATURES = [
@@ -23,6 +24,154 @@ RERANK_FEATURES = [
 ]
 COMMON_FEATURES = FIRST_STAGE_FEATURES + RERANK_FEATURES
 HYBRID_FEATURES = ["hybrid_bm25_dense_top10_overlap"]
+
+
+def _validate_finite(value: float, name: str) -> float:
+    import math
+
+    result = float(value)
+    if not math.isfinite(result):
+        raise ValueError(f"{name} must be finite, got {value!r}")
+    return result
+
+
+def _paired_query_ids(*values_by_query: dict[str, Any]) -> list[str]:
+    if not values_by_query or not values_by_query[0]:
+        raise ValueError("Paired bootstrap requires at least one query")
+    expected = set(values_by_query[0])
+    for values in values_by_query[1:]:
+        if set(values) != expected:
+            raise ValueError("Paired bootstrap inputs must contain identical query IDs")
+    return sorted(expected)
+
+
+def paired_query_bootstrap(
+    query_ids: list[str],
+    statistic_a: Callable[[list[str]], float],
+    statistic_b: Callable[[list[str]], float],
+    *,
+    n_resamples: int = 1_000,
+    confidence_level: float = 0.95,
+    seed: int = 42,
+) -> dict[str, float | int]:
+    """Paired query-level percentile bootstrap using one shared resample for both sides.
+
+    Query IDs, including repeated IDs introduced by sampling with replacement, are passed
+    unchanged to both statistic functions. The reported difference is always B - A.
+    """
+    import numpy as np
+
+    if not query_ids or len(query_ids) != len(set(query_ids)):
+        raise ValueError("query_ids must be non-empty and unique before resampling")
+    if n_resamples <= 0:
+        raise ValueError("n_resamples must be positive")
+    if not 0.0 < confidence_level < 1.0:
+        raise ValueError("confidence_level must be between zero and one")
+
+    ordered_ids = sorted(query_ids)
+    point_a = _validate_finite(statistic_a(ordered_ids), "point estimate A")
+    point_b = _validate_finite(statistic_b(ordered_ids), "point estimate B")
+    rng = np.random.default_rng(seed)
+    differences = np.empty(n_resamples, dtype=float)
+
+    for index in range(n_resamples):
+        sampled_indices = rng.integers(0, len(ordered_ids), size=len(ordered_ids))
+        sampled_ids = [ordered_ids[i] for i in sampled_indices]
+        sample_a = _validate_finite(statistic_a(sampled_ids), "bootstrap estimate A")
+        sample_b = _validate_finite(statistic_b(sampled_ids), "bootstrap estimate B")
+        differences[index] = sample_b - sample_a
+
+    if not np.isfinite(differences).all():
+        raise ValueError("Bootstrap differences contain NaN or infinite values")
+    tail = (1.0 - confidence_level) / 2.0
+    lower, upper = np.percentile(differences, [100.0 * tail, 100.0 * (1.0 - tail)])
+    return {
+        "point_estimate_a": point_a,
+        "point_estimate_b": point_b,
+        "difference": point_b - point_a,
+        "ci_lower": float(lower),
+        "ci_upper": float(upper),
+        "n_resamples": n_resamples,
+        "seed": seed,
+        "n_queries": len(ordered_ids),
+    }
+
+
+def bootstrap_mean_comparison(
+    values_a: dict[str, float],
+    values_b: dict[str, float],
+    *,
+    n_resamples: int = 1_000,
+    confidence_level: float = 0.95,
+    seed: int = 42,
+) -> dict[str, float | int]:
+    """Paired bootstrap for query-level mean metrics such as Recall@10 or success rate."""
+    query_ids = _paired_query_ids(values_a, values_b)
+    for query_id in query_ids:
+        _validate_finite(values_a[query_id], f"side A value for {query_id}")
+        _validate_finite(values_b[query_id], f"side B value for {query_id}")
+
+    return paired_query_bootstrap(
+        query_ids,
+        lambda sampled: statistics.fmean(values_a[qid] for qid in sampled),
+        lambda sampled: statistics.fmean(values_b[qid] for qid in sampled),
+        n_resamples=n_resamples,
+        confidence_level=confidence_level,
+        seed=seed,
+    )
+
+
+def bootstrap_score_comparison(
+    labels: dict[str, bool],
+    scores_a: dict[str, float],
+    scores_b: dict[str, float],
+    *,
+    metric: str,
+    side_a_is_probability: bool,
+    side_b_is_probability: bool,
+    n_resamples: int = 1_000,
+    confidence_level: float = 0.95,
+    seed: int = 42,
+) -> dict[str, float | int]:
+    """Paired AUPRC or Brier bootstrap for two confidence signals on the same queries.
+
+    Brier comparisons require genuine probabilities on both sides. In particular, the raw
+    cross-encoder score is never silently normalized or treated as a probability.
+    """
+    from sklearn.metrics import average_precision_score
+
+    if metric not in {"auprc", "brier"}:
+        raise ValueError("metric must be 'auprc' or 'brier'")
+    if metric == "brier" and not (side_a_is_probability and side_b_is_probability):
+        raise ValueError("Brier bootstrap requires probability scores on both sides")
+
+    query_ids = _paired_query_ids(labels, scores_a, scores_b)
+    for query_id in query_ids:
+        score_a = _validate_finite(scores_a[query_id], f"side A score for {query_id}")
+        score_b = _validate_finite(scores_b[query_id], f"side B score for {query_id}")
+        if metric == "brier" and not (0.0 <= score_a <= 1.0 and 0.0 <= score_b <= 1.0):
+            raise ValueError("Brier bootstrap probabilities must lie in [0, 1]")
+
+    def score(values: dict[str, float], sampled: list[str]) -> float:
+        y_true = [bool(labels[qid]) for qid in sampled]
+        y_score = [values[qid] for qid in sampled]
+        if metric == "brier":
+            return statistics.fmean(
+                (float(probability) - float(target)) ** 2
+                for probability, target in zip(y_score, y_true)
+            )
+        if not any(y_true):
+            return 0.0
+        return float(average_precision_score(y_true, y_score))
+
+    return paired_query_bootstrap(
+        query_ids,
+        lambda sampled: score(scores_a, sampled),
+        lambda sampled: score(scores_b, sampled),
+        n_resamples=n_resamples,
+        confidence_level=confidence_level,
+        seed=seed,
+    )
 
 
 def _sorted_by_rank(rows: list[dict]) -> list[dict]:

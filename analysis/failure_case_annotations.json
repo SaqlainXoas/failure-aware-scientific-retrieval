@@ -1,0 +1,112 @@
+{
+  "cases": {
+    "398": {
+      "gold_doc_id": "8883846",
+      "excerpt": "immunoregulation of B cell responses.",
+      "interpretation_labels": [
+        "title bias",
+        "cross-encoder overconfidence"
+      ],
+      "interpretation": "The highest-ranked non-gold abstract names B-cell exhaustion and HIV directly, while the annotated review discusses antibody responses more broadly. The reranker strongly favors the near-verbatim title match and leaves the gold review well below the cutoff."
+    },
+    "4": {
+      "gold_doc_id": "22942787",
+      "excerpt": "The proportion of patients diagnosed at an early stage increased from 22.5% in period 1 to 25.5% in period 2 and 26.3% in period 3",
+      "interpretation_labels": [
+        "entity/numerical mismatch",
+        "cross-encoder overconfidence"
+      ],
+      "interpretation": "The claim is dominated by a malformed percentage and metastatic-stage wording. A metastasis-focused non-gold abstract receives the top reranker score, while the annotated stage-at-diagnosis study falls from the first-stage top five to below the final cutoff."
+    },
+    "610": {
+      "gold_doc_id": "40096222",
+      "excerpt": "These data establish a role for adaptive immune-mediated protection from acute colitis under conditions of intestinal epithelial barrier compromise.",
+      "interpretation_labels": [
+        "terminology mismatch",
+        "evidence outside the cutoff"
+      ],
+      "interpretation": "The claim compresses barrier leakage, microbial translocation, and compensatory immune protection into the phrase “microbial products.” Broader immune-suppression papers dominate retrieval, while the annotated barrier-compromise study appears only beyond the top-50 candidate set."
+    },
+    "1096": {
+      "gold_doc_id": "29638116",
+      "excerpt": "Defined genetic models based on human pluripotent stem cells have opened new avenues for understanding disease mechanisms and drug screening.",
+      "interpretation_labels": [
+        "partial topical relevance",
+        "evidence outside the cutoff"
+      ],
+      "interpretation": "Many corpus abstracts describe individual pluripotent-cell derivations and therefore match the broad claim closely. The annotated paper instead emphasizes complex multicellular tissue models, so its less literal framing is pushed outside the reranker’s candidate set."
+    },
+    "92": {
+      "gold_doc_id": "1084345",
+      "excerpt": "CMA activity declines in aged organisms and have proposed that this failure in cellular clearance could contribute to the accumulation of altered proteins",
+      "interpretation_labels": [
+        "lexical distraction",
+        "partial topical relevance"
+      ],
+      "interpretation": "The query combines aging with ischemia/reperfusion, causing direct ischemia titles to dominate. The annotated aging-liver study describes declining cellular maintenance rather than ischemic injury explicitly, and it is absent even from the saved top-100."
+    },
+    "572": {
+      "gold_doc_id": "4447055",
+      "excerpt": "We generated a membrane-permeable peptide mimetic of the PTPσ wedge domain that binds to PTPσ and relieves CSPG-mediated inhibition.",
+      "interpretation_labels": [
+        "entity/numerical mismatch",
+        "evidence outside the cutoff"
+      ],
+      "interpretation": "The PTPRS/PTPσ identity connects the claim to the annotated peptide study, but the surrounding immune and tumor terminology points toward unrelated inhibitor papers. Reranking improves the gold position only slightly and leaves it outside the top ten."
+    },
+    "422": {
+      "gold_doc_id": "11172205",
+      "excerpt": "we used them to measure the ability of particles of different sizes to access the tumor.",
+      "interpretation_labels": [
+        "terminology mismatch",
+        "evidence outside the cutoff"
+      ],
+      "interpretation": "The annotated experiment operationalizes steric access through particle size, whereas the claim uses flexibility and rigidity language. The reranker promotes abstracts that literally mention microenvironment rigidity, improving the gold rank but not enough to cross the cutoff."
+    },
+    "1212": {
+      "gold_doc_id": "44724517",
+      "excerpt": "Although myeloid cell activation is requisite for an optimal innate immune response, this process must be tightly controlled to prevent collateral host tissue damage.",
+      "interpretation_labels": [
+        "lexical distraction",
+        "evidence outside the cutoff"
+      ],
+      "interpretation": "Monocyte, chronic infection, and prolonged activation terms steer both stages toward HIV-specific abstracts. The annotated KLF2 study describes the more general mechanism of harmful, insufficiently controlled myeloid inflammation and remains far below the top ten."
+    },
+    "1325": {
+      "gold_doc_id": "40476126",
+      "excerpt": "The compound N-(4-hydroxyphenyl)arachidonylamide (AM404) was shown to inhibit high-affinity anandamide accumulation in rat neurons and astrocytes in vitro",
+      "interpretation_labels": [
+        "terminology mismatch",
+        "evidence outside the cutoff"
+      ],
+      "interpretation": "The first stage is distracted by generic inhibitor language and does not place the AM404 study near the top. Pairwise reranking recognizes the exact compound and uptake mechanism strongly enough to move the gold document into the final top ten."
+    },
+    "955": {
+      "gold_doc_id": "2078658",
+      "excerpt": "we found that Oct4 is associated with multiple chromatin-modifying complexes with documented as well as newly proved functional significance in stem cell maintenance",
+      "interpretation_labels": [
+        "lexical distraction",
+        "evidence outside the cutoff"
+      ],
+      "interpretation": "Pioneer-factor terminology initially favors general chromatin-engagement papers, leaving the representative gold abstract deep in the candidates. Reranking responds to the explicit Oct4/chromatin-complex relationship and rescues annotated evidence into the final top ten."
+    },
+    "655": {
+      "gold_doc_id": "57574395",
+      "excerpt": "Here we show that FNDC5/irisin levels are reduced in AD hippocampi and cerebrospinal fluid, and in experimental AD models.",
+      "interpretation_labels": [
+        "partial topical relevance",
+        "cross-encoder overconfidence"
+      ],
+      "interpretation": "Hybrid retrieval correctly puts the FNDC5/irisin Alzheimer’s study first. Its abstract states the broader reduction in experimental models rather than the query’s precise infusion and mRNA wording, and the reranker instead promotes abstracts with more literal amyloid terminology."
+    },
+    "393": {
+      "gold_doc_id": "1148122",
+      "excerpt": "We used fitness profiling to measure the consequences of single-locus perturbations in the context of ethanol exposure.",
+      "interpretation_labels": [
+        "terminology mismatch",
+        "lexical distraction"
+      ],
+      "interpretation": "The terse SRL reference is not expanded in the annotated abstract, but ethanol adaptation makes the gold study a strong first-stage match. Reranking favors papers with explicit generic stress-response wording and moves the relevant ethanol-tolerance study below the cutoff."
+    }
+  }
+}

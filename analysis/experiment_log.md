@@ -38,3 +38,14 @@
 - Result: retrieval, reranking, decomposition, and confidence metrics reproduced exactly; 115 default tests and all 7 real-SciFact integration tests passed. Tables 2–6 and six compact manifests were generated from saved runs, and every manifest records `git_dirty: false`.
 - Result: hybrid remains the locked primary pipeline (calibration/dev Recall@50 `0.9660`). Its common-feature confidence model improves AUPRC from `0.9627` to `0.9748`, while Brier is worse than the train-fitted Platt baseline (`0.1659` vs. `0.0971`), so the Phase 5 analysis must treat calibration quality as a negative result rather than claiming uniform improvement.
 - Next action: begin Phase 5 bootstrap intervals and structured qualitative analysis without opening `beir/scifact/test`.
+
+## 2026-08-05 — Phase 5 uncertainty and structured failure analysis
+
+- Decision: used deterministic paired query-level bootstrap on the 162 calibration/dev query IDs: 1,000 size-162 resamples with replacement, the same sampled IDs on both sides, 95% percentile intervals, difference `B - A`, seed 42.
+- Decision: reliability uses ten fixed equal-width probability bins `[0.0, 0.1), …, [0.9, 1.0]`; probability 1.0 belongs to the last bin, empty bins are omitted, and every retained point reports its query count.
+- Decision: selected the two highest-confidence hybrid errors first, then excluded them and sampled fixed confidence-spread quantiles within `no_opportunity` (3), `unchanged_failure` (3), rescue (2), and degradation (2), using query ID as the stable tie-break. This produced 12 unique cases before their text was inspected.
+- Positive finding: hybrid's final top-10 success rate was `0.030864` above BM25, but its percentile interval touched zero (`[0.000000, 0.067901]`), so this is descriptive rather than decisive uncertainty evidence.
+- Negative finding: dense reranking reduced nDCG@10 by `-0.043846` with an interval entirely below zero (`[-0.080770, -0.008949]`). The common-feature hybrid calibrator also had worse Brier than the train-fitted Platt baseline by `+0.068870` (`[0.027551, 0.108748]`).
+- Mixed finding: Recall@10 changes for all rerankers and the hybrid raw-vs-calibrated AUPRC difference had intervals crossing zero. The manual cases show both genuine rescues and degradations, with recurring terminology mismatch, lexical distraction, incomplete candidate sets, and cross-encoder preference for literal title/phrase matches.
+- Limitation: the analysis has only 162 calibration/dev queries, and SciFact qrels can make a highly topical non-gold abstract look like a retrieval error; confidence predicts annotated-evidence retrieval, not scientific truth.
+- Result: all Phase 5 statistics, figures, and case selections use saved calibration/dev artifacts. The loader opened only `beir/scifact/train` to recover text for committed calibration/dev IDs; the final test split remains unopened for experimental evaluation.

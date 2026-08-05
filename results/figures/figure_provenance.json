@@ -1,0 +1,101 @@
+{
+  "split": "calibration-dev",
+  "generated_by": "python -m retrieval.tables",
+  "empty_reliability_bins": "omitted; retained points are annotated with sample counts",
+  "sources": {
+    "bm25": {
+      "run_dir": "2026-08-05T114728.602187Z_bm25_calibration-dev",
+      "run_split": "calibration-dev",
+      "pipeline": "bm25",
+      "git_commit": "c1f1155e91d9125b392074374fd2c7141db7e5f0",
+      "git_dirty": false,
+      "dataset": "beir/scifact",
+      "model_name": null,
+      "model_revision": null,
+      "reranker_model": "cross-encoder/ms-marco-MiniLM-L6-v2",
+      "reranker_revision": "c5ee24cb16019beea0893ab7796b1df96625c6b8",
+      "candidate_depth": 100,
+      "rerank_depth": 50
+    },
+    "dense_bge": {
+      "run_dir": "2026-08-05T114740.008737Z_dense_bge_calibration-dev",
+      "run_split": "calibration-dev",
+      "pipeline": "dense_bge",
+      "git_commit": "c1f1155e91d9125b392074374fd2c7141db7e5f0",
+      "git_dirty": false,
+      "dataset": "beir/scifact",
+      "model_name": "BAAI/bge-small-en-v1.5",
+      "model_revision": "5c38ec7c405ec4b44b94cc5a9bb96e735b38267a",
+      "reranker_model": "cross-encoder/ms-marco-MiniLM-L6-v2",
+      "reranker_revision": "c5ee24cb16019beea0893ab7796b1df96625c6b8",
+      "candidate_depth": 100,
+      "rerank_depth": 50
+    },
+    "hybrid_rrf": {
+      "run_dir": "2026-08-05T114749.452090Z_hybrid_rrf_calibration-dev",
+      "run_split": "calibration-dev",
+      "pipeline": "hybrid_rrf",
+      "git_commit": "c1f1155e91d9125b392074374fd2c7141db7e5f0",
+      "git_dirty": false,
+      "dataset": "beir/scifact",
+      "model_name": "BAAI/bge-small-en-v1.5",
+      "model_revision": "5c38ec7c405ec4b44b94cc5a9bb96e735b38267a",
+      "reranker_model": "cross-encoder/ms-marco-MiniLM-L6-v2",
+      "reranker_revision": "c5ee24cb16019beea0893ab7796b1df96625c6b8",
+      "candidate_depth": 100,
+      "rerank_depth": 50
+    },
+    "hybrid_confidence": {
+      "run_dir": "2026-08-05T114843.983136Z_hybrid_rrf_calibration-train",
+      "run_split": "calibration-train",
+      "pipeline": "hybrid_rrf",
+      "git_commit": "c1f1155e91d9125b392074374fd2c7141db7e5f0",
+      "git_dirty": false,
+      "dataset": "beir/scifact",
+      "model_name": "BAAI/bge-small-en-v1.5",
+      "model_revision": "5c38ec7c405ec4b44b94cc5a9bb96e735b38267a",
+      "reranker_model": "cross-encoder/ms-marco-MiniLM-L6-v2",
+      "reranker_revision": "c5ee24cb16019beea0893ab7796b1df96625c6b8",
+      "candidate_depth": 100,
+      "rerank_depth": 50
+    }
+  },
+  "figures": {
+    "first_stage_performance.png": {
+      "source_keys": [
+        "bm25",
+        "dense_bge",
+        "hybrid_rrf"
+      ],
+      "split": "calibration-dev"
+    },
+    "failure_breakdown.png": {
+      "source_keys": [
+        "bm25",
+        "dense_bge",
+        "hybrid_rrf"
+      ],
+      "split": "calibration-dev"
+    },
+    "reranking_transitions.png": {
+      "source_keys": [
+        "bm25",
+        "dense_bge",
+        "hybrid_rrf"
+      ],
+      "split": "calibration-dev"
+    },
+    "hybrid_reliability.png": {
+      "source_keys": [
+        "hybrid_confidence"
+      ],
+      "split": "calibration-dev"
+    },
+    "hybrid_risk_coverage.png": {
+      "source_keys": [
+        "hybrid_confidence"
+      ],
+      "split": "calibration-dev"
+    }
+  }
+}

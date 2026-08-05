@@ -272,6 +272,8 @@ def write_run_manifests(
 
 
 def main(runs_dir: str | Path = RUNS_DIR, tables_dir: str | Path = TABLES_DIR) -> None:
+    from retrieval.analysis import write_phase5_artifacts
+
     artifacts = load_run_artifacts(runs_dir)
     missing = [pipeline for pipeline in PIPELINES if pipeline not in artifacts]
     if missing:
@@ -339,6 +341,11 @@ def main(runs_dir: str | Path = RUNS_DIR, tables_dir: str | Path = TABLES_DIR) -
         )
 
     write_run_manifests(runs_dir, Path(tables_dir).parent / "manifests")
+    write_phase5_artifacts(
+        runs_dir=runs_dir,
+        tables_dir=tables_dir,
+        figures_dir=Path(tables_dir).parent / "figures",
+    )
 
 
 if __name__ == "__main__":

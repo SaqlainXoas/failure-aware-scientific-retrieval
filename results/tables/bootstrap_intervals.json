@@ -1,0 +1,309 @@
+{
+  "split": "calibration-dev",
+  "fit_split_for_confidence": "calibration-train",
+  "query_ids_file": "splits/calibration_dev.txt",
+  "bootstrap": {
+    "unit": "query_id",
+    "paired": true,
+    "difference_direction": "B - A",
+    "n_resamples": 1000,
+    "confidence_level": 0.95,
+    "interval": "percentile",
+    "seed": 42,
+    "n_queries": 162
+  },
+  "provenance": {
+    "bm25": {
+      "run_dir": "2026-08-05T114728.602187Z_bm25_calibration-dev",
+      "run_split": "calibration-dev",
+      "pipeline": "bm25",
+      "git_commit": "c1f1155e91d9125b392074374fd2c7141db7e5f0",
+      "git_dirty": false,
+      "dataset": "beir/scifact",
+      "model_name": null,
+      "model_revision": null,
+      "reranker_model": "cross-encoder/ms-marco-MiniLM-L6-v2",
+      "reranker_revision": "c5ee24cb16019beea0893ab7796b1df96625c6b8",
+      "candidate_depth": 100,
+      "rerank_depth": 50
+    },
+    "dense_bge": {
+      "run_dir": "2026-08-05T114740.008737Z_dense_bge_calibration-dev",
+      "run_split": "calibration-dev",
+      "pipeline": "dense_bge",
+      "git_commit": "c1f1155e91d9125b392074374fd2c7141db7e5f0",
+      "git_dirty": false,
+      "dataset": "beir/scifact",
+      "model_name": "BAAI/bge-small-en-v1.5",
+      "model_revision": "5c38ec7c405ec4b44b94cc5a9bb96e735b38267a",
+      "reranker_model": "cross-encoder/ms-marco-MiniLM-L6-v2",
+      "reranker_revision": "c5ee24cb16019beea0893ab7796b1df96625c6b8",
+      "candidate_depth": 100,
+      "rerank_depth": 50
+    },
+    "hybrid_rrf": {
+      "run_dir": "2026-08-05T114749.452090Z_hybrid_rrf_calibration-dev",
+      "run_split": "calibration-dev",
+      "pipeline": "hybrid_rrf",
+      "git_commit": "c1f1155e91d9125b392074374fd2c7141db7e5f0",
+      "git_dirty": false,
+      "dataset": "beir/scifact",
+      "model_name": "BAAI/bge-small-en-v1.5",
+      "model_revision": "5c38ec7c405ec4b44b94cc5a9bb96e735b38267a",
+      "reranker_model": "cross-encoder/ms-marco-MiniLM-L6-v2",
+      "reranker_revision": "c5ee24cb16019beea0893ab7796b1df96625c6b8",
+      "candidate_depth": 100,
+      "rerank_depth": 50
+    },
+    "hybrid_confidence": {
+      "run_dir": "2026-08-05T114843.983136Z_hybrid_rrf_calibration-train",
+      "run_split": "calibration-train",
+      "pipeline": "hybrid_rrf",
+      "git_commit": "c1f1155e91d9125b392074374fd2c7141db7e5f0",
+      "git_dirty": false,
+      "dataset": "beir/scifact",
+      "model_name": "BAAI/bge-small-en-v1.5",
+      "model_revision": "5c38ec7c405ec4b44b94cc5a9bb96e735b38267a",
+      "reranker_model": "cross-encoder/ms-marco-MiniLM-L6-v2",
+      "reranker_revision": "c5ee24cb16019beea0893ab7796b1df96625c6b8",
+      "candidate_depth": 100,
+      "rerank_depth": 50
+    }
+  },
+  "rows": [
+    {
+      "comparison_id": "bm25_recall_at_10_before_after",
+      "metric": "recall@10",
+      "side_a_label": "bm25:first_stage",
+      "side_b_label": "bm25:reranked",
+      "side_a_role": "first_stage_metric",
+      "side_b_role": "reranked_metric",
+      "point_estimate_a": 0.824074,
+      "point_estimate_b": 0.839506,
+      "difference": 0.015432,
+      "ci_lower": -0.018519,
+      "ci_upper": 0.04946,
+      "n_resamples": 1000,
+      "seed": 42,
+      "n_queries": 162,
+      "split": "calibration-dev",
+      "fit_split": null,
+      "source_runs": [
+        "2026-08-05T114728.602187Z_bm25_calibration-dev"
+      ]
+    },
+    {
+      "comparison_id": "bm25_ndcg_at_10_before_after",
+      "metric": "ndcg@10",
+      "side_a_label": "bm25:first_stage",
+      "side_b_label": "bm25:reranked",
+      "side_a_role": "first_stage_metric",
+      "side_b_role": "reranked_metric",
+      "point_estimate_a": 0.715084,
+      "point_estimate_b": 0.714266,
+      "difference": -0.000819,
+      "ci_lower": -0.038804,
+      "ci_upper": 0.035819,
+      "n_resamples": 1000,
+      "seed": 42,
+      "n_queries": 162,
+      "split": "calibration-dev",
+      "fit_split": null,
+      "source_runs": [
+        "2026-08-05T114728.602187Z_bm25_calibration-dev"
+      ]
+    },
+    {
+      "comparison_id": "dense_bge_recall_at_10_before_after",
+      "metric": "recall@10",
+      "side_a_label": "dense_bge:first_stage",
+      "side_b_label": "dense_bge:reranked",
+      "side_a_role": "first_stage_metric",
+      "side_b_role": "reranked_metric",
+      "point_estimate_a": 0.866255,
+      "point_estimate_b": 0.867284,
+      "difference": 0.001029,
+      "ci_lower": -0.037037,
+      "ci_upper": 0.038066,
+      "n_resamples": 1000,
+      "seed": 42,
+      "n_queries": 162,
+      "split": "calibration-dev",
+      "fit_split": null,
+      "source_runs": [
+        "2026-08-05T114740.008737Z_dense_bge_calibration-dev"
+      ]
+    },
+    {
+      "comparison_id": "dense_bge_ndcg_at_10_before_after",
+      "metric": "ndcg@10",
+      "side_a_label": "dense_bge:first_stage",
+      "side_b_label": "dense_bge:reranked",
+      "side_a_role": "first_stage_metric",
+      "side_b_role": "reranked_metric",
+      "point_estimate_a": 0.768918,
+      "point_estimate_b": 0.725072,
+      "difference": -0.043846,
+      "ci_lower": -0.08077,
+      "ci_upper": -0.008949,
+      "n_resamples": 1000,
+      "seed": 42,
+      "n_queries": 162,
+      "split": "calibration-dev",
+      "fit_split": null,
+      "source_runs": [
+        "2026-08-05T114740.008737Z_dense_bge_calibration-dev"
+      ]
+    },
+    {
+      "comparison_id": "hybrid_rrf_recall_at_10_before_after",
+      "metric": "recall@10",
+      "side_a_label": "hybrid_rrf:first_stage",
+      "side_b_label": "hybrid_rrf:reranked",
+      "side_a_role": "first_stage_metric",
+      "side_b_role": "reranked_metric",
+      "point_estimate_a": 0.864198,
+      "point_estimate_b": 0.87037,
+      "difference": 0.006173,
+      "ci_lower": -0.040123,
+      "ci_upper": 0.049383,
+      "n_resamples": 1000,
+      "seed": 42,
+      "n_queries": 162,
+      "split": "calibration-dev",
+      "fit_split": null,
+      "source_runs": [
+        "2026-08-05T114749.452090Z_hybrid_rrf_calibration-dev"
+      ]
+    },
+    {
+      "comparison_id": "hybrid_rrf_ndcg_at_10_before_after",
+      "metric": "ndcg@10",
+      "side_a_label": "hybrid_rrf:first_stage",
+      "side_b_label": "hybrid_rrf:reranked",
+      "side_a_role": "first_stage_metric",
+      "side_b_role": "reranked_metric",
+      "point_estimate_a": 0.751239,
+      "point_estimate_b": 0.7256,
+      "difference": -0.025639,
+      "ci_lower": -0.062162,
+      "ci_upper": 0.010206,
+      "n_resamples": 1000,
+      "seed": 42,
+      "n_queries": 162,
+      "split": "calibration-dev",
+      "fit_split": null,
+      "source_runs": [
+        "2026-08-05T114749.452090Z_hybrid_rrf_calibration-dev"
+      ]
+    },
+    {
+      "comparison_id": "final_success_10_bm25_vs_dense_bge",
+      "metric": "final_success_10",
+      "side_a_label": "bm25:reranked_final_success_10",
+      "side_b_label": "dense_bge:reranked_final_success_10",
+      "side_a_role": "final_top10_success",
+      "side_b_role": "final_top10_success",
+      "point_estimate_a": 0.845679,
+      "point_estimate_b": 0.87037,
+      "difference": 0.024691,
+      "ci_lower": -0.012346,
+      "ci_upper": 0.067901,
+      "n_resamples": 1000,
+      "seed": 42,
+      "n_queries": 162,
+      "split": "calibration-dev",
+      "fit_split": null,
+      "source_runs": [
+        "2026-08-05T114728.602187Z_bm25_calibration-dev",
+        "2026-08-05T114740.008737Z_dense_bge_calibration-dev"
+      ]
+    },
+    {
+      "comparison_id": "final_success_10_bm25_vs_hybrid_rrf",
+      "metric": "final_success_10",
+      "side_a_label": "bm25:reranked_final_success_10",
+      "side_b_label": "hybrid_rrf:reranked_final_success_10",
+      "side_a_role": "final_top10_success",
+      "side_b_role": "final_top10_success",
+      "point_estimate_a": 0.845679,
+      "point_estimate_b": 0.876543,
+      "difference": 0.030864,
+      "ci_lower": 0.0,
+      "ci_upper": 0.067901,
+      "n_resamples": 1000,
+      "seed": 42,
+      "n_queries": 162,
+      "split": "calibration-dev",
+      "fit_split": null,
+      "source_runs": [
+        "2026-08-05T114728.602187Z_bm25_calibration-dev",
+        "2026-08-05T114749.452090Z_hybrid_rrf_calibration-dev"
+      ]
+    },
+    {
+      "comparison_id": "final_success_10_dense_bge_vs_hybrid_rrf",
+      "metric": "final_success_10",
+      "side_a_label": "dense_bge:reranked_final_success_10",
+      "side_b_label": "hybrid_rrf:reranked_final_success_10",
+      "side_a_role": "final_top10_success",
+      "side_b_role": "final_top10_success",
+      "point_estimate_a": 0.87037,
+      "point_estimate_b": 0.876543,
+      "difference": 0.006173,
+      "ci_lower": -0.018673,
+      "ci_upper": 0.030864,
+      "n_resamples": 1000,
+      "seed": 42,
+      "n_queries": 162,
+      "split": "calibration-dev",
+      "fit_split": null,
+      "source_runs": [
+        "2026-08-05T114740.008737Z_dense_bge_calibration-dev",
+        "2026-08-05T114749.452090Z_hybrid_rrf_calibration-dev"
+      ]
+    },
+    {
+      "comparison_id": "hybrid_auprc_raw_vs_common_calibrated",
+      "metric": "auprc",
+      "side_a_label": "hybrid_rrf:raw_reranker_score",
+      "side_b_label": "hybrid_rrf:common_feature_calibrated",
+      "side_a_role": "raw_ranking_baseline",
+      "side_b_role": "common_feature_model",
+      "point_estimate_a": 0.962666,
+      "point_estimate_b": 0.974803,
+      "difference": 0.012137,
+      "ci_lower": -0.009031,
+      "ci_upper": 0.039529,
+      "n_resamples": 1000,
+      "seed": 42,
+      "n_queries": 162,
+      "split": "calibration-dev",
+      "fit_split": "calibration-train",
+      "source_runs": [
+        "2026-08-05T114843.983136Z_hybrid_rrf_calibration-train"
+      ]
+    },
+    {
+      "comparison_id": "hybrid_brier_platt_vs_common_calibrated",
+      "metric": "brier",
+      "side_a_label": "hybrid_rrf:train_fitted_platt",
+      "side_b_label": "hybrid_rrf:common_feature_calibrated",
+      "side_a_role": "train_fitted_probability_baseline",
+      "side_b_role": "common_feature_model",
+      "point_estimate_a": 0.097053,
+      "point_estimate_b": 0.165923,
+      "difference": 0.06887,
+      "ci_lower": 0.027551,
+      "ci_upper": 0.108748,
+      "n_resamples": 1000,
+      "seed": 42,
+      "n_queries": 162,
+      "split": "calibration-dev",
+      "fit_split": "calibration-train",
+      "source_runs": [
+        "2026-08-05T114843.983136Z_hybrid_rrf_calibration-train"
+      ]
+    }
+  ]
+}
