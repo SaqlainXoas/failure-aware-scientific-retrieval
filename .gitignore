@@ -9,10 +9,8 @@ wheels/
 # Virtual environments
 .venv
 
-# Docs (local notes/plans, not tracked)
-docs/
-
-# Local agent instructions (not tracked)
+# Local scratch notes only; the research plan/specs are version controlled.
+docs/notes/
 
 # Retrieval run outputs and disk cache (regenerable, not tracked)
 runs/*
