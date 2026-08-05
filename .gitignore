@@ -13,3 +13,8 @@ wheels/
 docs/
 
 # Local agent instructions (not tracked)
+
+# Retrieval run outputs and disk cache (regenerable, not tracked)
+runs/*
+!runs/.gitkeep
+.cache/

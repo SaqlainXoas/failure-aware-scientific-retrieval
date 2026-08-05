@@ -1,4 +1,6 @@
-# Shared dataset/split/device surface for all pipeline configs.
+# Reference documentation of the shared dataset/split/device surface across pipeline configs.
+# Not loaded by code — each pipeline config below duplicates these fields so a run's saved
+# config.yaml is fully self-contained.
 dataset: beir/scifact
 seed: 42
 splits_dir: splits
