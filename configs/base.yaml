@@ -1,0 +1,5 @@
+# Shared dataset/split/device surface for all pipeline configs.
+dataset: beir/scifact
+seed: 42
+splits_dir: splits
+device: auto  # auto | mps | cpu — consumed starting Phase 2
