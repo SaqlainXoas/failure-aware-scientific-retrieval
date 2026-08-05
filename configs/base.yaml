@@ -5,3 +5,7 @@ dataset: beir/scifact
 seed: 42
 splits_dir: splits
 device: auto  # auto | mps | cpu — consumed starting Phase 2
+reranker_model: cross-encoder/ms-marco-MiniLM-L6-v2  # consumed starting Phase 3
+reranker_revision: c5ee24cb16019beea0893ab7796b1df96625c6b8
+rerank_depth: 50
+reranker_batch_size: 32

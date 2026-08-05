@@ -14,7 +14,8 @@ from typing import Any
 import yaml
 
 from retrieval.data import load_config, load_scifact_split, resolve_device, resolve_split, setup_logging
-from retrieval.evaluate import evaluate_query
+from retrieval.evaluate import decomposition_metrics, evaluate_query, label_transition
+from retrieval.rerank import rerank
 from retrieval.retrieve import bm25_retrieve, dense_retrieve, hybrid_retrieve
 
 logger = logging.getLogger(__name__)
@@ -128,6 +129,59 @@ def compute_metrics(rows: list[dict], qrels: dict[str, dict[str, int]]) -> dict[
     }
 
 
+def run_reranking(
+    config: dict[str, Any], data: dict[str, Any], first_stage_rows: list[dict], device: str, force: bool
+) -> tuple[list[dict], dict[str, bool]]:
+    """Reranks each query's own top rerank_depth first-stage candidates via the frozen cross-encoder."""
+    cache_hits: dict[str, bool] = {}
+    rows = rerank(
+        first_stage_rows,
+        data["queries"],
+        data["corpus"],
+        top_k=config.get("rerank_depth", 50),
+        model_name=config["reranker_model"],
+        model_revision=config.get("reranker_revision"),
+        device=device,
+        batch_size=config.get("reranker_batch_size", 32),
+        cache_dir=CACHE_DIR,
+        force=force,
+        cache_hits=cache_hits,
+    )
+    return rows, cache_hits
+
+
+def compute_query_labels(
+    first_stage_rows: list[dict],
+    reranked_rows: list[dict],
+    qrels: dict[str, dict[str, int]],
+    rerank_depth: int,
+) -> list[dict]:
+    """Per-query candidate/final success and transition label — the row-level source the
+    decomposition table and later manual failure analysis both read from."""
+    first_stage_by_query: dict[str, list[str]] = {}
+    for row in sorted(first_stage_rows, key=lambda r: r["rank"]):
+        first_stage_by_query.setdefault(row["query_id"], []).append(row["doc_id"])
+    reranked_by_query: dict[str, list[str]] = {}
+    for row in sorted(reranked_rows, key=lambda r: r["rank"]):
+        reranked_by_query.setdefault(row["query_id"], []).append(row["doc_id"])
+
+    labels = []
+    for query_id, qrels_for_query in qrels.items():
+        gold_doc_ids = {doc_id for doc_id, grade in qrels_for_query.items() if grade > 0}
+        first_stage_ranked = first_stage_by_query.get(query_id, [])
+        reranked_ranked = reranked_by_query.get(query_id, [])
+        transition = label_transition(gold_doc_ids, first_stage_ranked, reranked_ranked, rerank_depth)
+        labels.append(
+            {
+                "query_id": query_id,
+                "candidate_success_50": bool(gold_doc_ids & set(first_stage_ranked[:rerank_depth])),
+                "final_success_10": bool(gold_doc_ids & set(reranked_ranked[:10])),
+                "transition_label": transition,
+            }
+        )
+    return labels
+
+
 def build_manifest(
     config: dict[str, Any],
     config_path: str,
@@ -159,11 +213,28 @@ def build_manifest(
         manifest["bm25_params"] = {"k1": "library_default", "b": "library_default"}
     if config["pipeline"] == "hybrid_rrf":
         manifest["rrf_k"] = config.get("rrf_k", 60)
+    manifest["reranker_model"] = config.get("reranker_model")
+    manifest["reranker_revision"] = config.get("reranker_revision")
+    manifest["rerank_depth"] = config.get("rerank_depth")
+    manifest["reranker_batch_size"] = config.get("reranker_batch_size")
     return manifest
 
 
+def _write_jsonl(path: Path, rows: list[dict]) -> None:
+    with open(path, "w") as f:
+        for row in rows:
+            f.write(json.dumps(row) + "\n")
+
+
 def write_run_dir(
-    config: dict[str, Any], manifest: dict[str, Any], rows: list[dict], metrics: dict[str, Any]
+    config: dict[str, Any],
+    manifest: dict[str, Any],
+    rows: list[dict],
+    metrics: dict[str, Any],
+    reranked_rows: list[dict],
+    reranked_metrics: dict[str, Any],
+    labels: list[dict],
+    decomposition: dict[str, Any],
 ) -> Path:
     timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H%M%S")
     split_slug = manifest["split"].replace(" ", "-")
@@ -172,10 +243,12 @@ def write_run_dir(
 
     (run_dir / "config.yaml").write_text(yaml.safe_dump(config, sort_keys=False))
     (run_dir / "manifest.json").write_text(json.dumps(manifest, indent=2) + "\n")
-    with open(run_dir / "rankings.jsonl", "w") as f:
-        for row in rows:
-            f.write(json.dumps(row) + "\n")
+    _write_jsonl(run_dir / "rankings.jsonl", rows)
     (run_dir / "metrics.json").write_text(json.dumps(metrics, indent=2) + "\n")
+    _write_jsonl(run_dir / "reranked_rankings.jsonl", reranked_rows)
+    (run_dir / "reranked_metrics.json").write_text(json.dumps(reranked_metrics, indent=2) + "\n")
+    _write_jsonl(run_dir / "failure_labels.jsonl", labels)
+    (run_dir / "decomposition_metrics.json").write_text(json.dumps(decomposition, indent=2) + "\n")
 
     return run_dir
 
@@ -192,13 +265,24 @@ def main(argv: list[str] | None = None) -> None:
 
     rows, cache_hits = run_pipeline(config, data, device, args.force)
     metrics = compute_metrics(rows, data["qrels"])
+
+    rerank_depth = config.get("rerank_depth", 50)
+    reranked_rows, rerank_cache_hits = run_reranking(config, data, rows, device, args.force)
+    reranked_metrics = compute_metrics(reranked_rows, data["qrels"])
+    labels = compute_query_labels(rows, reranked_rows, data["qrels"], rerank_depth)
+    decomposition = decomposition_metrics([label["transition_label"] for label in labels])
+
     manifest = build_manifest(
-        config, args.config, args.split, device, metrics["n_queries"], cache_hits
+        config, args.config, args.split, device, metrics["n_queries"], {**cache_hits, **rerank_cache_hits}
     )
-    run_dir = write_run_dir(config, manifest, rows, metrics)
+    run_dir = write_run_dir(
+        config, manifest, rows, metrics, reranked_rows, reranked_metrics, labels, decomposition
+    )
 
     logger.info("Wrote run directory %s", run_dir)
     logger.info("Metrics: %s", json.dumps(metrics, indent=2))
+    logger.info("Reranked metrics: %s", json.dumps(reranked_metrics, indent=2))
+    logger.info("Decomposition: %s", json.dumps(decomposition, indent=2))
 
 
 if __name__ == "__main__":

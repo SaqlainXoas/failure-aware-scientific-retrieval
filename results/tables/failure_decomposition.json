@@ -1,0 +1,32 @@
+[
+  {
+    "pipeline": "bm25",
+    "candidate_set_failure_rate": 0.11728395061728394,
+    "reranking_failure_rate": 0.037037037037037035,
+    "final_success_rate": 0.845679012345679,
+    "opportunity_rate": 0.8827160493827161,
+    "rescue_rate": 0.030864197530864196,
+    "degradation_rate": 0.018518518518518517,
+    "conditional_conversion_rate": 0.958041958041958
+  },
+  {
+    "pipeline": "dense_bge",
+    "candidate_set_failure_rate": 0.04938271604938271,
+    "reranking_failure_rate": 0.08024691358024691,
+    "final_success_rate": 0.8703703703703703,
+    "opportunity_rate": 0.9506172839506173,
+    "rescue_rate": 0.024691358024691357,
+    "degradation_rate": 0.030864197530864196,
+    "conditional_conversion_rate": 0.9155844155844156
+  },
+  {
+    "pipeline": "hybrid_rrf",
+    "candidate_set_failure_rate": 0.030864197530864196,
+    "reranking_failure_rate": 0.09259259259259259,
+    "final_success_rate": 0.8765432098765432,
+    "opportunity_rate": 0.9691358024691358,
+    "rescue_rate": 0.043209876543209874,
+    "degradation_rate": 0.037037037037037035,
+    "conditional_conversion_rate": 0.9044585987261147
+  }
+]
