@@ -1,0 +1,134 @@
+{
+  "split": "calibration-train",
+  "provenance": {
+    "bm25": {
+      "run_dir": "2026-08-05T114804.402803Z_bm25_calibration-train",
+      "git_commit": "c1f1155e91d9125b392074374fd2c7141db7e5f0",
+      "git_dirty": false,
+      "timestamp_utc": "2026-08-05T11:48:04Z",
+      "fit_split": "calibration-train",
+      "eval_split": "calibration-dev",
+      "class_weight": "balanced"
+    },
+    "dense_bge": {
+      "run_dir": "2026-08-05T114826.431718Z_dense_bge_calibration-train",
+      "git_commit": "c1f1155e91d9125b392074374fd2c7141db7e5f0",
+      "git_dirty": false,
+      "timestamp_utc": "2026-08-05T11:48:26Z",
+      "fit_split": "calibration-train",
+      "eval_split": "calibration-dev",
+      "class_weight": "balanced"
+    },
+    "hybrid_rrf": {
+      "run_dir": "2026-08-05T114843.983136Z_hybrid_rrf_calibration-train",
+      "git_commit": "c1f1155e91d9125b392074374fd2c7141db7e5f0",
+      "git_dirty": false,
+      "timestamp_utc": "2026-08-05T11:48:43Z",
+      "fit_split": "calibration-train",
+      "eval_split": "calibration-dev",
+      "class_weight": "balanced"
+    }
+  },
+  "rows": [
+    {
+      "pipeline": "bm25",
+      "is_primary_pipeline": false,
+      "model": "raw_score",
+      "model_role": "raw_ranking_baseline",
+      "auroc": 0.8113868613138686,
+      "auprc": 0.9553799304796561,
+      "brier": null,
+      "n_queries": 162
+    },
+    {
+      "pipeline": "bm25",
+      "is_primary_pipeline": false,
+      "model": "raw_score_platt",
+      "model_role": "train_fitted_probability_baseline",
+      "auroc": 0.8113868613138686,
+      "auprc": 0.9553799304796561,
+      "brier": 0.10415486366633481,
+      "n_queries": 162
+    },
+    {
+      "pipeline": "bm25",
+      "is_primary_pipeline": false,
+      "model": "calibrated",
+      "model_role": "common_feature_model",
+      "auroc": 0.8741605839416058,
+      "auprc": 0.9758451977218141,
+      "brier": 0.1570156285705923,
+      "n_queries": 162
+    },
+    {
+      "pipeline": "dense_bge",
+      "is_primary_pipeline": false,
+      "model": "raw_score",
+      "model_role": "raw_ranking_baseline",
+      "auroc": 0.8139142181695375,
+      "auprc": 0.9629587182533538,
+      "brier": null,
+      "n_queries": 162
+    },
+    {
+      "pipeline": "dense_bge",
+      "is_primary_pipeline": false,
+      "model": "raw_score_platt",
+      "model_role": "train_fitted_probability_baseline",
+      "auroc": 0.8139142181695375,
+      "auprc": 0.9629587182533538,
+      "brier": 0.0976485162866002,
+      "n_queries": 162
+    },
+    {
+      "pipeline": "dense_bge",
+      "is_primary_pipeline": false,
+      "model": "calibrated",
+      "model_role": "common_feature_model",
+      "auroc": 0.8807835190813913,
+      "auprc": 0.9790974875171985,
+      "brier": 0.151865361559539,
+      "n_queries": 162
+    },
+    {
+      "pipeline": "hybrid_rrf",
+      "is_primary_pipeline": true,
+      "model": "raw_score",
+      "model_role": "raw_ranking_baseline",
+      "auroc": 0.8035211267605634,
+      "auprc": 0.9626662832670816,
+      "brier": null,
+      "n_queries": 162
+    },
+    {
+      "pipeline": "hybrid_rrf",
+      "is_primary_pipeline": true,
+      "model": "raw_score_platt",
+      "model_role": "train_fitted_probability_baseline",
+      "auroc": 0.8035211267605634,
+      "auprc": 0.9626662832670816,
+      "brier": 0.09705310676066112,
+      "n_queries": 162
+    },
+    {
+      "pipeline": "hybrid_rrf",
+      "is_primary_pipeline": true,
+      "model": "calibrated",
+      "model_role": "common_feature_model",
+      "auroc": 0.851056338028169,
+      "auprc": 0.9748034578386959,
+      "brier": 0.16592292462425412,
+      "n_queries": 162
+    },
+    {
+      "pipeline": "hybrid_rrf",
+      "is_primary_pipeline": true,
+      "model": "calibrated_hybrid_exploratory",
+      "model_role": "exploratory_overlap_ablation",
+      "auroc": 0.851056338028169,
+      "auprc": 0.975485125189774,
+      "brier": 0.16187206911771432,
+      "n_queries": 162
+    }
+  ]
+}

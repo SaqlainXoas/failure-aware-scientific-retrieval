@@ -1,0 +1,67 @@
+{
+  "git_commit": "c1f1155e91d9125b392074374fd2c7141db7e5f0",
+  "git_dirty": false,
+  "timestamp_utc": "2026-08-05T11:48:04Z",
+  "dataset": "beir/scifact",
+  "split": "calibration-train",
+  "pipeline": "bm25",
+  "n_queries": 647,
+  "candidate_depth": 100,
+  "package_versions": {
+    "python": "3.11.14",
+    "bm25s": "0.3.10",
+    "sentence-transformers": "5.6.1",
+    "torch": "2.13.0",
+    "numpy": "2.4.6",
+    "ir-datasets": "0.6.3",
+    "pyyaml": "6.0.3",
+    "scikit-learn": "1.9.0",
+    "joblib": "1.5.3",
+    "matplotlib": "3.11.1",
+    "pyarrow": "25.0.0"
+  },
+  "os": "macOS-26.4.1-arm64-arm-64bit",
+  "device": "cpu",
+  "seed": 42,
+  "config_path": "configs/bm25.yaml",
+  "cache_hits": {
+    "bm25_index": true,
+    "reranker_pairs_computed": 0
+  },
+  "bm25_params": {
+    "library": "bm25s",
+    "library_version": "0.3.10",
+    "k1": 1.5,
+    "b": 0.75,
+    "delta": 0.5,
+    "method": "lucene",
+    "idf_method": "lucene",
+    "tokenizer": {
+      "lower": true,
+      "token_pattern": "(?u)\\b\\w\\w+\\b",
+      "stopwords": "english",
+      "stemmer": null
+    },
+    "corpus_text_format": "<title>\\n<abstract>",
+    "preprocessing_version": "v1"
+  },
+  "reranker_model": "cross-encoder/ms-marco-MiniLM-L6-v2",
+  "reranker_revision": "c5ee24cb16019beea0893ab7796b1df96625c6b8",
+  "rerank_depth": 50,
+  "reranker_batch_size": 32,
+  "confidence_primary_feature_names": [
+    "first_stage_top1_score_norm",
+    "first_stage_top1_top2_margin_norm",
+    "first_stage_rerank_rank_correlation",
+    "first_stage_top1_in_reranked_top3",
+    "reranker_top1_score",
+    "reranker_top1_top2_margin",
+    "reranker_top5_mean",
+    "reranker_top5_std"
+  ],
+  "confidence_exploratory_feature_names": null,
+  "confidence_class_weight": "balanced",
+  "calibrated": true,
+  "confidence_fit_split": "calibration-train",
+  "confidence_eval_split": "calibration-dev"
+}

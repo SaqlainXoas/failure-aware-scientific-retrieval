@@ -31,3 +31,10 @@
 - Reason: this keeps candidate-set failure, reranking failure, and final success as an exact all-query partition while making conditional performance explicit.
 - Result: on calibration/dev, the balanced common-feature models improve AUROC/AUPRC over the raw baseline for all three pipelines, but have worse Brier scores than the train-fitted Platt baselines. This mixed finding is retained rather than changing the predeclared class-weight choice after seeing dev performance.
 - Next action: Phase 5 will bootstrap the baseline-vs-calibrated AUPRC/Brier comparison (plan §10.4) and add the reliability diagram; `beir/scifact/test` remains untouched.
+
+## 2026-08-05 — Phase 0–4 alignment verification
+
+- Decision: regenerated all three calibration/dev runs and all three calibration/train confidence runs from clean source commit `c1f1155e91d9125b392074374fd2c7141db7e5f0`.
+- Result: retrieval, reranking, decomposition, and confidence metrics reproduced exactly; 115 default tests and all 7 real-SciFact integration tests passed. Tables 2–6 and six compact manifests were generated from saved runs, and every manifest records `git_dirty: false`.
+- Result: hybrid remains the locked primary pipeline (calibration/dev Recall@50 `0.9660`). Its common-feature confidence model improves AUPRC from `0.9627` to `0.9748`, while Brier is worse than the train-fitted Platt baseline (`0.1659` vs. `0.0971`), so the Phase 5 analysis must treat calibration quality as a negative result rather than claiming uniform improvement.
+- Next action: begin Phase 5 bootstrap intervals and structured qualitative analysis without opening `beir/scifact/test`.

@@ -1,0 +1,154 @@
+{
+  "split": "calibration-train",
+  "provenance": {
+    "bm25": {
+      "run_dir": "2026-08-05T114804.402803Z_bm25_calibration-train",
+      "git_commit": "c1f1155e91d9125b392074374fd2c7141db7e5f0",
+      "git_dirty": false,
+      "timestamp_utc": "2026-08-05T11:48:04Z",
+      "fit_split": "calibration-train",
+      "eval_split": "calibration-dev",
+      "class_weight": "balanced"
+    },
+    "dense_bge": {
+      "run_dir": "2026-08-05T114826.431718Z_dense_bge_calibration-train",
+      "git_commit": "c1f1155e91d9125b392074374fd2c7141db7e5f0",
+      "git_dirty": false,
+      "timestamp_utc": "2026-08-05T11:48:26Z",
+      "fit_split": "calibration-train",
+      "eval_split": "calibration-dev",
+      "class_weight": "balanced"
+    },
+    "hybrid_rrf": {
+      "run_dir": "2026-08-05T114843.983136Z_hybrid_rrf_calibration-train",
+      "git_commit": "c1f1155e91d9125b392074374fd2c7141db7e5f0",
+      "git_dirty": false,
+      "timestamp_utc": "2026-08-05T11:48:43Z",
+      "fit_split": "calibration-train",
+      "eval_split": "calibration-dev",
+      "class_weight": "balanced"
+    }
+  },
+  "rows": [
+    {
+      "pipeline": "bm25",
+      "is_primary_pipeline": false,
+      "model": "raw_score",
+      "model_role": "raw_ranking_baseline",
+      "success@1.0": 0.845679012345679,
+      "n_kept@1.0": 162,
+      "success@0.8": 0.9230769230769231,
+      "n_kept@0.8": 130,
+      "success@0.6": 0.9381443298969072,
+      "n_kept@0.6": 97
+    },
+    {
+      "pipeline": "bm25",
+      "is_primary_pipeline": false,
+      "model": "raw_score_platt",
+      "model_role": "train_fitted_probability_baseline",
+      "success@1.0": 0.845679012345679,
+      "n_kept@1.0": 162,
+      "success@0.8": 0.9230769230769231,
+      "n_kept@0.8": 130,
+      "success@0.6": 0.9381443298969072,
+      "n_kept@0.6": 97
+    },
+    {
+      "pipeline": "bm25",
+      "is_primary_pipeline": false,
+      "model": "calibrated",
+      "model_role": "common_feature_model",
+      "success@1.0": 0.845679012345679,
+      "n_kept@1.0": 162,
+      "success@0.8": 0.9076923076923077,
+      "n_kept@0.8": 130,
+      "success@0.6": 0.979381443298969,
+      "n_kept@0.6": 97
+    },
+    {
+      "pipeline": "dense_bge",
+      "is_primary_pipeline": false,
+      "model": "raw_score",
+      "model_role": "raw_ranking_baseline",
+      "success@1.0": 0.8703703703703703,
+      "n_kept@1.0": 162,
+      "success@0.8": 0.9384615384615385,
+      "n_kept@0.8": 130,
+      "success@0.6": 0.9587628865979382,
+      "n_kept@0.6": 97
+    },
+    {
+      "pipeline": "dense_bge",
+      "is_primary_pipeline": false,
+      "model": "raw_score_platt",
+      "model_role": "train_fitted_probability_baseline",
+      "success@1.0": 0.8703703703703703,
+      "n_kept@1.0": 162,
+      "success@0.8": 0.9384615384615385,
+      "n_kept@0.8": 130,
+      "success@0.6": 0.9587628865979382,
+      "n_kept@0.6": 97
+    },
+    {
+      "pipeline": "dense_bge",
+      "is_primary_pipeline": false,
+      "model": "calibrated",
+      "model_role": "common_feature_model",
+      "success@1.0": 0.8703703703703703,
+      "n_kept@1.0": 162,
+      "success@0.8": 0.9461538461538461,
+      "n_kept@0.8": 130,
+      "success@0.6": 0.979381443298969,
+      "n_kept@0.6": 97
+    },
+    {
+      "pipeline": "hybrid_rrf",
+      "is_primary_pipeline": true,
+      "model": "raw_score",
+      "model_role": "raw_ranking_baseline",
+      "success@1.0": 0.8765432098765432,
+      "n_kept@1.0": 162,
+      "success@0.8": 0.9461538461538461,
+      "n_kept@0.8": 130,
+      "success@0.6": 0.9484536082474226,
+      "n_kept@0.6": 97
+    },
+    {
+      "pipeline": "hybrid_rrf",
+      "is_primary_pipeline": true,
+      "model": "raw_score_platt",
+      "model_role": "train_fitted_probability_baseline",
+      "success@1.0": 0.8765432098765432,
+      "n_kept@1.0": 162,
+      "success@0.8": 0.9461538461538461,
+      "n_kept@0.8": 130,
+      "success@0.6": 0.9484536082474226,
+      "n_kept@0.6": 97
+    },
+    {
+      "pipeline": "hybrid_rrf",
+      "is_primary_pipeline": true,
+      "model": "calibrated",
+      "model_role": "common_feature_model",
+      "success@1.0": 0.8765432098765432,
+      "n_kept@1.0": 162,
+      "success@0.8": 0.9384615384615385,
+      "n_kept@0.8": 130,
+      "success@0.6": 0.979381443298969,
+      "n_kept@0.6": 97
+    },
+    {
+      "pipeline": "hybrid_rrf",
+      "is_primary_pipeline": true,
+      "model": "calibrated_hybrid_exploratory",
+      "model_role": "exploratory_overlap_ablation",
+      "success@1.0": 0.8765432098765432,
+      "n_kept@1.0": 162,
+      "success@0.8": 0.9307692307692308,
+      "n_kept@0.8": 130,
+      "success@0.6": 0.979381443298969,
+      "n_kept@0.6": 97
+    }
+  ]
+}

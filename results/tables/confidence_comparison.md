@@ -1,0 +1,12 @@
+| pipeline | is_primary_pipeline | model | model_role | auroc | auprc | brier | n_queries |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| bm25 | False | raw_score | raw_ranking_baseline | 0.8114 | 0.9554 | n/a | 162 |
+| bm25 | False | raw_score_platt | train_fitted_probability_baseline | 0.8114 | 0.9554 | 0.1042 | 162 |
+| bm25 | False | calibrated | common_feature_model | 0.8742 | 0.9758 | 0.1570 | 162 |
+| dense_bge | False | raw_score | raw_ranking_baseline | 0.8139 | 0.9630 | n/a | 162 |
+| dense_bge | False | raw_score_platt | train_fitted_probability_baseline | 0.8139 | 0.9630 | 0.0976 | 162 |
+| dense_bge | False | calibrated | common_feature_model | 0.8808 | 0.9791 | 0.1519 | 162 |
+| hybrid_rrf | True | raw_score | raw_ranking_baseline | 0.8035 | 0.9627 | n/a | 162 |
+| hybrid_rrf | True | raw_score_platt | train_fitted_probability_baseline | 0.8035 | 0.9627 | 0.0971 | 162 |
+| hybrid_rrf | True | calibrated | common_feature_model | 0.8511 | 0.9748 | 0.1659 | 162 |
+| hybrid_rrf | True | calibrated_hybrid_exploratory | exploratory_overlap_ablation | 0.8511 | 0.9755 | 0.1619 | 162 |

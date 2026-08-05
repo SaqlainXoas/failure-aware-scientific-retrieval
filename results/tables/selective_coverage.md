@@ -1,0 +1,12 @@
+| pipeline | is_primary_pipeline | model | model_role | success@1.0 | n_kept@1.0 | success@0.8 | n_kept@0.8 | success@0.6 | n_kept@0.6 |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| bm25 | False | raw_score | raw_ranking_baseline | 0.8457 | 162 | 0.9231 | 130 | 0.9381 | 97 |
+| bm25 | False | raw_score_platt | train_fitted_probability_baseline | 0.8457 | 162 | 0.9231 | 130 | 0.9381 | 97 |
+| bm25 | False | calibrated | common_feature_model | 0.8457 | 162 | 0.9077 | 130 | 0.9794 | 97 |
+| dense_bge | False | raw_score | raw_ranking_baseline | 0.8704 | 162 | 0.9385 | 130 | 0.9588 | 97 |
+| dense_bge | False | raw_score_platt | train_fitted_probability_baseline | 0.8704 | 162 | 0.9385 | 130 | 0.9588 | 97 |
+| dense_bge | False | calibrated | common_feature_model | 0.8704 | 162 | 0.9462 | 130 | 0.9794 | 97 |
+| hybrid_rrf | True | raw_score | raw_ranking_baseline | 0.8765 | 162 | 0.9462 | 130 | 0.9485 | 97 |
+| hybrid_rrf | True | raw_score_platt | train_fitted_probability_baseline | 0.8765 | 162 | 0.9462 | 130 | 0.9485 | 97 |
+| hybrid_rrf | True | calibrated | common_feature_model | 0.8765 | 162 | 0.9385 | 130 | 0.9794 | 97 |
+| hybrid_rrf | True | calibrated_hybrid_exploratory | exploratory_overlap_ablation | 0.8765 | 162 | 0.9308 | 130 | 0.9794 | 97 |
