@@ -42,6 +42,125 @@ DELTA_COLUMNS = [
     for column in (f"{metric}_first_stage", f"{metric}_reranked", f"{metric}_delta")
 ]
 
+# Markdown-only presentation. The JSON keys stay machine-readable and unabbreviated; these
+# labels and formats exist so the .md files are legible without a decoder ring.
+COLUMN_LABELS = {
+    "pipeline": "Pipeline",
+    "is_primary_pipeline": "Primary",
+    "model": "Confidence model",
+    "model_role": "Role",
+    "metric": "Metric",
+    "comparison_id": "Comparison",
+    "n_queries": "Queries",
+    "n_failures": "Failures",
+    "n_resamples": "Resamples",
+    "seed": "Seed",
+    "mrr@10": "MRR@10",
+    "ndcg@10": "nDCG@10",
+    "auroc": "AUROC",
+    "auprc": "AUPRC",
+    "brier": "Brier",
+    "candidate_set_failure_rate": "Candidate-set failure",
+    "reranking_failure_rate": "Reranking failure",
+    "final_success_rate": "Final success",
+    "opportunity_rate": "Had opportunity",
+    "rescue_rate": "Rescued",
+    "degradation_rate": "Degraded",
+    "conditional_conversion_rate": "Success given opportunity",
+    "share_of_failures_from_candidate_set": "Failures from candidate set",
+    "side_a_label": "Side A",
+    "side_b_label": "Side B",
+    "point_estimate_a": "A",
+    "point_estimate_b": "B",
+    "difference": "Difference (B − A)",
+    "excludes_zero": "Excludes 0",
+    **{f"recall@{k}": f"Recall@{k}" for k in (5, 10, 50)},
+    **{
+        label: text
+        for metric, name in zip(DELTA_METRICS, ("Recall@5", "Recall@10", "MRR@10", "nDCG@10"))
+        for label, text in (
+            (f"{metric}_first_stage", f"{name} before"),
+            (f"{metric}_reranked", f"{name} after"),
+            (f"{metric}_delta", f"{name} Δ"),
+        )
+    },
+    **{
+        label: text
+        for level in COVERAGE_LEVELS
+        for label, text in (
+            (f"success@{level}", f"Success @{float(level):.0%}"),
+            (f"n_kept@{level}", f"Kept @{float(level):.0%}"),
+        )
+    },
+}
+
+# Rendered as percentages because they are shares of a query population, where "11.7%" is
+# immediately meaningful and "0.1173" is not. Ranking metrics keep the decimal form the IR
+# literature uses, so they stay comparable with published numbers.
+PERCENT_COLUMNS = frozenset(DECOMPOSITION_COLUMNS)
+
+
+# Metric identifiers appear as cell values in the bootstrap tables, where they read as
+# acronyms rather than as JSON keys.
+METRIC_LABELS = {"auroc": "AUROC", "auprc": "AUPRC", "brier": "Brier", "ndcg@10": "nDCG@10",
+                 "mrr@10": "MRR@10", "recall@10": "Recall@10", "recall@5": "Recall@5",
+                 "recall@50": "Recall@50", "final_success_10": "Final success@10"}
+MODEL_LABELS = {
+    "raw_score": "raw reranker score",
+    "raw_score_platt": "raw score, Platt-scaled",
+    "calibrated": "common-feature calibrator",
+    "calibrated_hybrid_exploratory": "calibrator + BM25/dense overlap",
+}
+MODEL_ROLE_LABELS = {
+    "raw_ranking_baseline": "ranking baseline",
+    "train_fitted_probability_baseline": "probability baseline",
+    "common_feature_model": "primary",
+    "exploratory_overlap_ablation": "exploratory ablation",
+}
+
+
+def column_label(column: str) -> str:
+    return COLUMN_LABELS.get(column, column)
+
+
+def format_cell(column: str, value: Any) -> str:
+    if value is None:
+        return "n/a"
+    if isinstance(value, bool):
+        return "yes" if value else "no"
+    if column == "metric":
+        return METRIC_LABELS.get(value, str(value))
+    if column == "model":
+        return MODEL_LABELS.get(value, str(value))
+    if column == "model_role":
+        return MODEL_ROLE_LABELS.get(value, str(value))
+    if isinstance(value, float):
+        if column in PERCENT_COLUMNS:
+            return f"{value:.1%}"
+        if column.endswith("_delta") or column == "difference":
+            return f"{value:+.3f}"
+        return f"{value:.3f}"
+    return str(value)
+
+
+def markdown_header(columns: list[str], numeric: list[bool] | None = None) -> list[str]:
+    """Header and alignment rows; numeric columns are right-aligned so digits line up."""
+    numeric = numeric or [False] * len(columns)
+    return [
+        "| " + " | ".join(column_label(column) for column in columns) + " |",
+        "| " + " | ".join("---:" if is_numeric else "---" for is_numeric in numeric) + " |",
+    ]
+
+
+def _numeric_columns(rows: list[dict[str, Any]], columns: list[str]) -> list[bool]:
+    return [
+        any(
+            isinstance(row.get(column), (int, float)) and not isinstance(row.get(column), bool)
+            for row in rows
+        )
+        for column in columns
+    ]
+
 
 def _latest_run_dirs(runs_dir: str | Path = RUNS_DIR, split: str = SPLIT) -> dict[str, Path]:
     """Finds the most recent run dir per pipeline (by timestamp-prefixed name) under runs_dir."""
@@ -215,21 +334,9 @@ def build_selective_table(artifacts: dict[str, dict[str, Any]]) -> list[dict[str
 
 
 def render_markdown_table(rows: list[dict[str, Any]], columns: list[str]) -> str:
-    lines = [
-        "| " + " | ".join(columns) + " |",
-        "| " + " | ".join("---" for _ in columns) + " |",
-    ]
+    lines = markdown_header(columns, _numeric_columns(rows, columns))
     for row in rows:
-        cells = []
-        for col in columns:
-            value = row[col]
-            if value is None:
-                cells.append("n/a")
-            elif isinstance(value, float):
-                cells.append(f"{value:+.4f}" if col.endswith("_delta") else f"{value:.4f}")
-            else:
-                cells.append(str(value))
-        lines.append("| " + " | ".join(cells) + " |")
+        lines.append("| " + " | ".join(format_cell(col, row[col]) for col in columns) + " |")
     return "\n".join(lines) + "\n"
 
 

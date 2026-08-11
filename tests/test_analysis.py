@@ -382,7 +382,7 @@ def test_bootstrap_artifact_has_exact_comparisons_finite_values_and_provenance(
             assert np.isfinite(row[field])
 
 
-def test_bootstrap_markdown_uses_the_exact_rounded_json_values():
+def test_bootstrap_markdown_renders_the_json_values_and_never_recomputes_them():
     payload = {
         "split": "calibration-dev",
         "bootstrap": {
@@ -412,9 +412,15 @@ def test_bootstrap_markdown_uses_the_exact_rounded_json_values():
     }
 
     markdown = render_bootstrap_markdown(payload)
+    row = payload["rows"][0]
 
-    for field in ("point_estimate_a", "point_estimate_b", "difference", "ci_lower", "ci_upper"):
-        assert f"{payload['rows'][0][field]:.6f}" in markdown
+    # The Markdown is a rounded view of the JSON, not a second computation: every displayed
+    # number has to be the payload's own value at display precision.
+    assert f"{row['point_estimate_a']:.3f}" in markdown
+    assert f"{row['point_estimate_b']:.3f}" in markdown
+    assert f"{row['difference']:+.3f}" in markdown
+    # The interval is one cell, so both bounds are only ever read together.
+    assert f"[{row['ci_lower']:+.3f}, {row['ci_upper']:+.3f}]" in markdown
 
 
 def test_failure_case_loader_uses_train_and_committed_dev_ids(tmp_path, monkeypatch):

@@ -1,5 +1,5 @@
-| pipeline | candidate_set_failure_rate | reranking_failure_rate | final_success_rate | opportunity_rate | rescue_rate | degradation_rate | conditional_conversion_rate | share_of_failures_from_candidate_set |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| bm25 | 0.1173 | 0.0370 | 0.8457 | 0.8827 | 0.0309 | 0.0185 | 0.9580 | 0.7600 |
-| dense_bge | 0.0494 | 0.0802 | 0.8704 | 0.9506 | 0.0247 | 0.0309 | 0.9156 | 0.3810 |
-| hybrid_rrf | 0.0309 | 0.0926 | 0.8765 | 0.9691 | 0.0432 | 0.0370 | 0.9045 | 0.2500 |
+| Pipeline | Candidate-set failure | Reranking failure | Final success | Had opportunity | Rescued | Degraded | Success given opportunity | Failures from candidate set |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| bm25 | 11.7% | 3.7% | 84.6% | 88.3% | 3.1% | 1.9% | 95.8% | 76.0% |
+| dense_bge | 4.9% | 8.0% | 87.0% | 95.1% | 2.5% | 3.1% | 91.6% | 38.1% |
+| hybrid_rrf | 3.1% | 9.3% | 87.7% | 96.9% | 4.3% | 3.7% | 90.4% | 25.0% |

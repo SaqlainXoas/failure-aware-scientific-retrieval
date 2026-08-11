@@ -1,12 +1,12 @@
-| pipeline | is_primary_pipeline | model | model_role | auroc | auprc | brier | n_queries |
-| --- | --- | --- | --- | --- | --- | --- | --- |
-| bm25 | False | raw_score | raw_ranking_baseline | 0.8114 | 0.9554 | n/a | 162 |
-| bm25 | False | raw_score_platt | train_fitted_probability_baseline | 0.8114 | 0.9554 | 0.1042 | 162 |
-| bm25 | False | calibrated | common_feature_model | 0.8742 | 0.9758 | 0.1570 | 162 |
-| dense_bge | False | raw_score | raw_ranking_baseline | 0.8139 | 0.9630 | n/a | 162 |
-| dense_bge | False | raw_score_platt | train_fitted_probability_baseline | 0.8139 | 0.9630 | 0.0976 | 162 |
-| dense_bge | False | calibrated | common_feature_model | 0.8808 | 0.9791 | 0.1519 | 162 |
-| hybrid_rrf | True | raw_score | raw_ranking_baseline | 0.8035 | 0.9627 | n/a | 162 |
-| hybrid_rrf | True | raw_score_platt | train_fitted_probability_baseline | 0.8035 | 0.9627 | 0.0971 | 162 |
-| hybrid_rrf | True | calibrated | common_feature_model | 0.8511 | 0.9748 | 0.1659 | 162 |
-| hybrid_rrf | True | calibrated_hybrid_exploratory | exploratory_overlap_ablation | 0.8511 | 0.9755 | 0.1619 | 162 |
+| Pipeline | Primary | Confidence model | Role | AUROC | AUPRC | Brier | Queries |
+| --- | --- | --- | --- | ---: | ---: | ---: | ---: |
+| bm25 | no | raw reranker score | ranking baseline | 0.811 | 0.955 | n/a | 162 |
+| bm25 | no | raw score, Platt-scaled | probability baseline | 0.811 | 0.955 | 0.104 | 162 |
+| bm25 | no | common-feature calibrator | primary | 0.874 | 0.976 | 0.157 | 162 |
+| dense_bge | no | raw reranker score | ranking baseline | 0.814 | 0.963 | n/a | 162 |
+| dense_bge | no | raw score, Platt-scaled | probability baseline | 0.814 | 0.963 | 0.098 | 162 |
+| dense_bge | no | common-feature calibrator | primary | 0.881 | 0.979 | 0.152 | 162 |
+| hybrid_rrf | yes | raw reranker score | ranking baseline | 0.804 | 0.963 | n/a | 162 |
+| hybrid_rrf | yes | raw score, Platt-scaled | probability baseline | 0.804 | 0.963 | 0.097 | 162 |
+| hybrid_rrf | yes | common-feature calibrator | primary | 0.851 | 0.975 | 0.166 | 162 |
+| hybrid_rrf | yes | calibrator + BM25/dense overlap | exploratory ablation | 0.851 | 0.975 | 0.162 | 162 |

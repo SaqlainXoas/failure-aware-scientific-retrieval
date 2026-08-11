@@ -1,12 +1,12 @@
-| pipeline | is_primary_pipeline | model | model_role | success@1.0 | n_kept@1.0 | success@0.8 | n_kept@0.8 | success@0.6 | n_kept@0.6 |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| bm25 | False | raw_score | raw_ranking_baseline | 0.8457 | 162 | 0.9231 | 130 | 0.9381 | 97 |
-| bm25 | False | raw_score_platt | train_fitted_probability_baseline | 0.8457 | 162 | 0.9231 | 130 | 0.9381 | 97 |
-| bm25 | False | calibrated | common_feature_model | 0.8457 | 162 | 0.9077 | 130 | 0.9794 | 97 |
-| dense_bge | False | raw_score | raw_ranking_baseline | 0.8704 | 162 | 0.9385 | 130 | 0.9588 | 97 |
-| dense_bge | False | raw_score_platt | train_fitted_probability_baseline | 0.8704 | 162 | 0.9385 | 130 | 0.9588 | 97 |
-| dense_bge | False | calibrated | common_feature_model | 0.8704 | 162 | 0.9462 | 130 | 0.9794 | 97 |
-| hybrid_rrf | True | raw_score | raw_ranking_baseline | 0.8765 | 162 | 0.9462 | 130 | 0.9485 | 97 |
-| hybrid_rrf | True | raw_score_platt | train_fitted_probability_baseline | 0.8765 | 162 | 0.9462 | 130 | 0.9485 | 97 |
-| hybrid_rrf | True | calibrated | common_feature_model | 0.8765 | 162 | 0.9385 | 130 | 0.9794 | 97 |
-| hybrid_rrf | True | calibrated_hybrid_exploratory | exploratory_overlap_ablation | 0.8765 | 162 | 0.9308 | 130 | 0.9794 | 97 |
+| Pipeline | Primary | Confidence model | Role | Success @100% | Kept @100% | Success @80% | Kept @80% | Success @60% | Kept @60% |
+| --- | --- | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| bm25 | no | raw reranker score | ranking baseline | 0.846 | 162 | 0.923 | 130 | 0.938 | 97 |
+| bm25 | no | raw score, Platt-scaled | probability baseline | 0.846 | 162 | 0.923 | 130 | 0.938 | 97 |
+| bm25 | no | common-feature calibrator | primary | 0.846 | 162 | 0.908 | 130 | 0.979 | 97 |
+| dense_bge | no | raw reranker score | ranking baseline | 0.870 | 162 | 0.938 | 130 | 0.959 | 97 |
+| dense_bge | no | raw score, Platt-scaled | probability baseline | 0.870 | 162 | 0.938 | 130 | 0.959 | 97 |
+| dense_bge | no | common-feature calibrator | primary | 0.870 | 162 | 0.946 | 130 | 0.979 | 97 |
+| hybrid_rrf | yes | raw reranker score | ranking baseline | 0.877 | 162 | 0.946 | 130 | 0.948 | 97 |
+| hybrid_rrf | yes | raw score, Platt-scaled | probability baseline | 0.877 | 162 | 0.946 | 130 | 0.948 | 97 |
+| hybrid_rrf | yes | common-feature calibrator | primary | 0.877 | 162 | 0.938 | 130 | 0.979 | 97 |
+| hybrid_rrf | yes | calibrator + BM25/dense overlap | exploratory ablation | 0.877 | 162 | 0.931 | 130 | 0.979 | 97 |

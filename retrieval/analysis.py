@@ -25,6 +25,8 @@ from retrieval.tables import (
     _load,
     build_comparison_table,
     build_decomposition_table,
+    column_label,
+    format_cell,
     load_run_artifacts,
 )
 
@@ -419,6 +421,30 @@ def build_cv_bootstrap_artifact(runs_dir: str | Path = RUNS_DIR) -> dict[str, An
     }
 
 
+def _interval_cell(row: dict[str, Any]) -> str:
+    """The two interval bounds as one `[lo, hi]` cell — an interval is read as a unit, and two
+    separate columns make the reader reassemble it."""
+    return f"[{row['ci_lower']:+.3f}, {row['ci_upper']:+.3f}]"
+
+
+def _bootstrap_table_lines(
+    rows: list[dict[str, Any]], columns: list[str], headers: list[str]
+) -> list[str]:
+    lines = [
+        "| " + " | ".join(headers) + " |",
+        "| " + " | ".join("---" if column in ("comparison_id", "metric", "side_a_label",
+                                              "side_b_label", "excludes_zero") else "---:"
+                          for column in columns) + " |",
+    ]
+    for row in rows:
+        cells = [
+            _interval_cell(row) if column == "95% CI" else format_cell(column, row[column])
+            for column in columns
+        ]
+        lines.append("| " + " | ".join(cells) + " |")
+    return lines
+
+
 def render_cv_bootstrap_markdown(payload: dict[str, Any]) -> str:
     columns = [
         "comparison_id",
@@ -426,11 +452,13 @@ def render_cv_bootstrap_markdown(payload: dict[str, Any]) -> str:
         "point_estimate_a",
         "point_estimate_b",
         "difference",
-        "ci_lower",
-        "ci_upper",
+        "95% CI",
         "excludes_zero",
         "n_queries",
         "n_failures",
+    ]
+    headers = [
+        column if column == "95% CI" else column_label(column) for column in columns
     ]
     lines = [
         "# Cross-validated bootstrap intervals (higher-powered secondary analysis)",
@@ -438,25 +466,15 @@ def render_cv_bootstrap_markdown(payload: dict[str, Any]) -> str:
         payload["why"],
         "",
         (
-            f"Protocol: {payload['protocol']}. Difference: `B - A`. "
+            f"Protocol: {payload['protocol']}. Difference: `B - A`, where A is the raw-score "
+            "baseline and B the common-feature calibrator. "
             f"{payload['bootstrap']['n_resamples']} paired resamples, "
             f"{payload['bootstrap']['confidence_level']:.0%} percentile intervals, "
             f"seed {payload['bootstrap']['seed']}."
         ),
         "",
-        "| " + " | ".join(columns) + " |",
-        "| " + " | ".join("---" for _ in columns) + " |",
+        *_bootstrap_table_lines(payload["rows"], columns, headers),
     ]
-    float_columns = {"point_estimate_a", "point_estimate_b", "difference", "ci_lower", "ci_upper"}
-    for row in payload["rows"]:
-        lines.append(
-            "| "
-            + " | ".join(
-                f"{row[column]:.6f}" if column in float_columns else str(row[column])
-                for column in columns
-            )
-            + " |"
-        )
     provenance = ", ".join(
         f"`{name}` → `{source['run_dir']}` @ `{source['git_commit']}`"
         for name, source in payload["provenance"].items()
@@ -474,11 +492,11 @@ def render_bootstrap_markdown(payload: dict[str, Any]) -> str:
         "point_estimate_a",
         "point_estimate_b",
         "difference",
-        "ci_lower",
-        "ci_upper",
+        "95% CI",
         "n_queries",
-        "n_resamples",
-        "seed",
+    ]
+    headers = [
+        column if column == "95% CI" else column_label(column) for column in columns
     ]
     lines = [
         "# Paired query-level bootstrap intervals",
@@ -487,25 +505,12 @@ def render_bootstrap_markdown(payload: dict[str, Any]) -> str:
             f"Split: `{payload['split']}`. Difference: `B - A`. "
             f"{payload['bootstrap']['n_resamples']} paired resamples, "
             f"{payload['bootstrap']['confidence_level']:.0%} percentile intervals, "
-            f"seed {payload['bootstrap']['seed']}."
+            f"seed {payload['bootstrap']['seed']}. Every row uses the same protocol, so the "
+            "per-row resample count and seed live in the JSON rather than repeating here."
         ),
         "",
-        "| " + " | ".join(columns) + " |",
-        "| " + " | ".join("---" for _ in columns) + " |",
+        *_bootstrap_table_lines(payload["rows"], columns, headers),
     ]
-    float_columns = {
-        "point_estimate_a",
-        "point_estimate_b",
-        "difference",
-        "ci_lower",
-        "ci_upper",
-    }
-    for row in payload["rows"]:
-        cells = [
-            f"{row[column]:.6f}" if column in float_columns else str(row[column])
-            for column in columns
-        ]
-        lines.append("| " + " | ".join(cells) + " |")
     provenance = ", ".join(
         f"`{name}` → `{source['run_dir']}` @ `{source['git_commit']}`"
         for name, source in payload["provenance"].items()
