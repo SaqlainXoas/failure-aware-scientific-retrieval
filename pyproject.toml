@@ -4,6 +4,10 @@ version = "0.1.0"
 description = "A controlled SciFact study comparing lexical, dense, and hybrid retrieval with cross-encoder reranking, separating candidate-set failures from reranking failures, and evaluating lightweight confidence signals for retrieval failure detection."
 readme = "README.md"
 requires-python = ">=3.11"
+license = "MIT"
+license-files = ["LICENSE"]
+keywords = ["information-retrieval", "scifact", "reranking", "calibration", "bm25", "dense-retrieval"]
+authors = [{ name = "Saqlain" }]
 dependencies = [
     "ir-datasets>=0.6.3",
     "pyyaml>=6.0.3",

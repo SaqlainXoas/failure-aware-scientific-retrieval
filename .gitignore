@@ -9,10 +9,17 @@ wheels/
 # Virtual environments
 .venv
 
-# Local scratch notes only; the research plan/specs are version controlled.
-docs/notes/
+# Tooling caches
+.pytest_cache/
+.uv-cache/
+
+# Local planning notes, not published.
+docs/
 
 # Retrieval run outputs and disk cache (regenerable, not tracked)
 runs/*
 !runs/.gitkeep
 .cache/
+
+# macOS
+.DS_Store
