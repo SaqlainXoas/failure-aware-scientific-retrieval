@@ -24,12 +24,12 @@ from retrieval.tables import (
     RUNS_DIR,
     SPLIT,
     TABLES_DIR,
-    _latest_run_dirs,
-    _load,
     build_comparison_table,
     build_decomposition_table,
     column_label,
     format_cell,
+    latest_run_dirs,
+    load_json,
     load_run_artifacts,
 )
 
@@ -39,6 +39,7 @@ SPLITS_DIR = "splits"
 BOOTSTRAP_RESAMPLES = 1_000
 BOOTSTRAP_SEED = 42
 BOOTSTRAP_CONFIDENCE_LEVEL = 0.95
+
 
 def load_jsonl(path: Path) -> list[dict[str, Any]]:
     return [json.loads(line) for line in path.read_text().splitlines() if line.strip()]
@@ -51,7 +52,7 @@ def _load_parquet(path: Path) -> list[dict[str, Any]]:
 
 
 def source_provenance(run_dir: Path) -> dict[str, Any]:
-    manifest = _load(run_dir, "manifest.json")
+    manifest = load_json(run_dir, "manifest.json")
     return {
         "run_dir": run_dir.name,
         "run_split": manifest.get("split"),
@@ -69,17 +70,17 @@ def source_provenance(run_dir: Path) -> dict[str, Any]:
 
 
 def _phase5_source_runs(runs_dir: str | Path) -> tuple[dict[str, Path], Path]:
-    dev_runs = _latest_run_dirs(runs_dir, SPLIT)
+    dev_runs = latest_run_dirs(runs_dir, SPLIT)
     missing = [pipeline for pipeline in PIPELINES if pipeline not in dev_runs]
     if missing:
         raise FileNotFoundError(f"Missing calibration-dev source runs for {missing}")
-    calibration_runs = _latest_run_dirs(runs_dir, CALIBRATION_SPLIT)
+    calibration_runs = latest_run_dirs(runs_dir, CALIBRATION_SPLIT)
     if PRIMARY_PIPELINE not in calibration_runs:
         raise FileNotFoundError("Missing hybrid calibration-train confidence source run")
 
     required_dev = ("query_results.parquet", "rankings.jsonl", "reranked_rankings.jsonl")
     for pipeline, run_dir in dev_runs.items():
-        manifest = _load(run_dir, "manifest.json")
+        manifest = load_json(run_dir, "manifest.json")
         if manifest.get("git_dirty") is not False:
             raise ValueError(f"Phase 5 source run must be clean: {run_dir.name}")
         for filename in required_dev:
@@ -87,7 +88,7 @@ def _phase5_source_runs(runs_dir: str | Path) -> tuple[dict[str, Path], Path]:
                 raise FileNotFoundError(f"{run_dir.name}/{filename} is missing")
 
     confidence_run = calibration_runs[PRIMARY_PIPELINE]
-    confidence_manifest = _load(confidence_run, "manifest.json")
+    confidence_manifest = load_json(confidence_run, "manifest.json")
     if confidence_manifest.get("git_dirty") is not False:
         raise ValueError(f"Phase 5 confidence source run must be clean: {confidence_run.name}")
     for filename in ("confidence_predictions.jsonl", "risk_coverage.json"):
@@ -342,7 +343,7 @@ def build_cv_bootstrap_artifact(runs_dir: str | Path = RUNS_DIR) -> dict[str, An
     rows: list[dict[str, Any]] = []
     provenance: dict[str, Any] = {}
     for pipeline in PIPELINES:
-        run_dir = _latest_run_dirs(runs_dir, CALIBRATION_SPLIT).get(pipeline)
+        run_dir = latest_run_dirs(runs_dir, CALIBRATION_SPLIT).get(pipeline)
         if run_dir is None or not (run_dir / "confidence_cv_predictions.jsonl").exists():
             continue
         provenance[pipeline] = source_provenance(run_dir)
@@ -555,7 +556,7 @@ def write_phase5_artifacts(
         for pipeline in PIPELINES
     ]
     predictions = load_jsonl(confidence_run / "confidence_predictions.jsonl")
-    risk_coverage = _load(confidence_run, "risk_coverage.json")["models"]
+    risk_coverage = load_json(confidence_run, "risk_coverage.json")["models"]
 
     figures_dir = Path(figures_dir)
     figure_sources = {

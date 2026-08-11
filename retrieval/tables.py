@@ -162,7 +162,7 @@ def _numeric_columns(rows: list[dict[str, Any]], columns: list[str]) -> list[boo
     ]
 
 
-def _latest_run_dirs(runs_dir: str | Path = RUNS_DIR, split: str = SPLIT) -> dict[str, Path]:
+def latest_run_dirs(runs_dir: str | Path = RUNS_DIR, split: str = SPLIT) -> dict[str, Path]:
     """Finds the most recent run dir per pipeline (by timestamp-prefixed name) under runs_dir."""
     runs_by_pipeline: dict[str, list[Path]] = {pipeline: [] for pipeline in PIPELINES}
     runs_path = Path(runs_dir)
@@ -186,7 +186,7 @@ def _latest_run_dirs(runs_dir: str | Path = RUNS_DIR, split: str = SPLIT) -> dic
     }
 
 
-def _load(run_dir: Path, filename: str) -> dict:
+def load_json(run_dir: Path, filename: str) -> dict:
     return json.loads((run_dir / filename).read_text())
 
 
@@ -194,12 +194,12 @@ def load_run_artifacts(runs_dir: str | Path = RUNS_DIR, split: str = SPLIT) -> d
     """Loads each pipeline's latest `split` run: first-stage metrics, reranked metrics,
     decomposition metrics, and the manifest fields needed for provenance."""
     artifacts = {}
-    for pipeline, run_dir in _latest_run_dirs(runs_dir, split).items():
-        manifest = _load(run_dir, "manifest.json")
+    for pipeline, run_dir in latest_run_dirs(runs_dir, split).items():
+        manifest = load_json(run_dir, "manifest.json")
         artifacts[pipeline] = {
-            "metrics": _load(run_dir, "metrics.json"),
-            "reranked_metrics": _load(run_dir, "reranked_metrics.json"),
-            "decomposition": _load(run_dir, "decomposition_metrics.json"),
+            "metrics": load_json(run_dir, "metrics.json"),
+            "reranked_metrics": load_json(run_dir, "reranked_metrics.json"),
+            "decomposition": load_json(run_dir, "decomposition_metrics.json"),
             "provenance": {
                 "run_dir": run_dir.name,
                 "git_commit": manifest.get("git_commit"),
@@ -260,10 +260,10 @@ def load_confidence_artifacts(
     report on calibration-dev; the split labels travel with the artifacts so the table cannot
     misattribute dev results to train."""
     artifacts = {}
-    for pipeline, run_dir in _latest_run_dirs(runs_dir, split).items():
-        confidence = _load(run_dir, "confidence_metrics.json")
-        selective = _load(run_dir, "selective_results.json")
-        manifest = _load(run_dir, "manifest.json")
+    for pipeline, run_dir in latest_run_dirs(runs_dir, split).items():
+        confidence = load_json(run_dir, "confidence_metrics.json")
+        selective = load_json(run_dir, "selective_results.json")
+        manifest = load_json(run_dir, "manifest.json")
         artifacts[pipeline] = {
             "confidence": confidence,
             "selective": selective,
@@ -365,7 +365,7 @@ def write_run_manifests(
     manifests_dir.mkdir(parents=True, exist_ok=True)
     written = []
     for split in (SPLIT, CALIBRATION_SPLIT):
-        for pipeline, run_dir in _latest_run_dirs(runs_dir, split).items():
+        for pipeline, run_dir in latest_run_dirs(runs_dir, split).items():
             destination = manifests_dir / f"{pipeline}_{split}.json"
             destination.write_text((run_dir / "manifest.json").read_text())
             written.append(destination)
