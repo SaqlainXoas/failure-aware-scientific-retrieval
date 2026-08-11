@@ -25,6 +25,21 @@ COMMON_FEATURES = FIRST_STAGE_FEATURES + RERANK_FEATURES
 HYBRID_FEATURES = ["hybrid_bm25_dense_top10_overlap"]
 
 
+def confidence_feature_names(pipeline: str) -> list[str]:
+    """The common feature set — the primary model for every pipeline, hybrid included."""
+    del pipeline  # kept in the signature: the feature set is a per-pipeline question by design
+    return COMMON_FEATURES
+
+
+def exploratory_feature_names(pipeline: str) -> list[str] | None:
+    """Common features plus the hybrid-only BM25/dense overlap, for hybrid_rrf only.
+
+    This is one clearly labelled exploratory ablation, not a replacement for the common-feature
+    comparison: it is fitted and reported *in addition to* the primary model, never instead
+    of it."""
+    return COMMON_FEATURES + HYBRID_FEATURES if pipeline == "hybrid_rrf" else None
+
+
 def _validate_finite(value: float, name: str) -> float:
     import math
 

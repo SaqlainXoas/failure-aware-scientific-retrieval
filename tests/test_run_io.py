@@ -5,8 +5,9 @@ import json
 import joblib
 import pytest
 
-import retrieval.run as run_module
-from retrieval.run import build_manifest, build_query_results, per_query_metrics, write_run_dir
+import retrieval.runio as runio_module
+from retrieval.run import per_query_metrics
+from retrieval.runio import build_manifest, build_query_results, write_run_dir
 from retrieval.tables import (
     MODEL_ROLES,
     build_confidence_table,
@@ -130,7 +131,7 @@ def test_manifest_records_fit_and_eval_splits_only_when_calibrated():
 
 
 def test_manifest_records_clean_source_state(monkeypatch):
-    monkeypatch.setattr(run_module, "_git_dirty", lambda: False)
+    monkeypatch.setattr(runio_module, "_git_dirty", lambda: False)
 
     manifest = build_manifest(_config("bm25"), "c.yaml", "calibration-dev", "cpu", 1, {})
 

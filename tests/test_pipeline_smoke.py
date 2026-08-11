@@ -12,14 +12,13 @@ import hashlib
 import pytest
 
 import retrieval.rerank as rerank_module
-from retrieval.confidence import COMMON_FEATURES, HYBRID_FEATURES
+from retrieval.confidence import COMMON_FEATURES, HYBRID_FEATURES, exploratory_feature_names
 from retrieval.evaluate import CATEGORIES, decomposition_metrics
 from retrieval.rerank import rerank
 from retrieval.retrieve import bm25_retrieve
 from retrieval.run import (
     compute_metrics,
     compute_query_labels,
-    exploratory_feature_names,
     per_query_metrics,
     run_calibration,
     run_confidence_features,
