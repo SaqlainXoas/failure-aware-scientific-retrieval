@@ -1,9 +1,8 @@
 """Confidence feature extraction, raw-score baseline, and logistic calibration.
 
-Predicts `final_success_10` from interpretable reranker-score and
-first-stage score/rank features. The scaler and LogisticRegression are always fitted
-together in one sklearn Pipeline on calibration-train only; calibration-dev is used
-only to select display thresholds and report metrics, never to fit anything.
+Predicts `final_success_10` from interpretable reranker-score and first-stage features. The
+scaler and LogisticRegression are fitted together in one sklearn Pipeline on calibration-train
+only; calibration-dev selects display thresholds and reports metrics, and fits nothing.
 """
 
 import statistics
@@ -208,14 +207,9 @@ def _reranker_features(reranked_docs: list[dict]) -> dict[str, float]:
 
 
 def _first_stage_features(first_stage_docs: list[dict], reranked_docs: list[dict]) -> dict[str, float]:
-    """First-stage score/rank features, within-query min-max normalized so BM25/cosine/RRF
-    scales never need cross-pipeline comparison. A constant candidate set (mx == mn)
-    normalizes to the uninformative midpoint 0.5 rather than dividing by zero.
-
-    `first_stage_docs` is expected to already be scoped to the reranked candidate set;
-    `extract_features` truncates to rerank_depth before calling in, so the normalization
-    denominator is the same depth for every pipeline rather than whatever depth each
-    retriever happened to emit."""
+    """First-stage score/rank features, min-max normalized within the query so BM25, cosine,
+    and RRF scores never have to be compared across pipelines. A constant candidate set
+    normalizes to 0.5 rather than dividing by zero."""
     scores = [row["score"] for row in first_stage_docs]
     if scores:
         mn, mx = min(scores), max(scores)
@@ -293,12 +287,8 @@ def extract_features(
 ) -> dict[str, dict[str, float]]:
     """Per-query feature dict keyed by query_id, over the common feature set.
 
-    First-stage rows are truncated to `rerank_depth` first, so every feature is computed over
-    the candidate set the reranker actually saw and the within-query normalization uses the same
-    denominator for all three pipelines.
-
-    `raw_rows` (the un-fused `{"bm25": [...], "dense": [...]}` rows) is required only to
-    add the hybrid-only overlap feature; omit it for bm25/dense_bge pipelines.
+    First-stage rows are truncated to `rerank_depth` first, so every feature sees exactly the
+    candidate set the reranker saw. `raw_rows` is needed only for the hybrid overlap feature.
     """
     first_stage_by_query = _rows_by_query(first_stage_rows)
     reranked_by_query = _rows_by_query(reranked_rows)
@@ -330,14 +320,9 @@ def raw_baseline_scores(reranked_rows: list[dict]) -> dict[str, float]:
 
 
 def fit_raw_score_calibrator(scores: dict[str, float], labels_by_query: dict[str, bool]):
-    """Platt scaling of the raw top-1 reranker score: a one-feature LogisticRegression fitted
-    on calibration-train, giving the baseline a genuine probability so its Brier score is
-    comparable with the feature calibrator's.
-
-    The raw cross-encoder logit is not a probability, yet the baseline still needs a Brier
-    score; fitting the transform on train (never on the split being scored) is what makes those
-    two compatible. AUROC/AUPRC are unchanged by this monotone transform, so the raw ordering is
-    still what the ranking metrics measure."""
+    """Platt scaling of the raw top-1 reranker score, fitted on calibration-train, so the
+    baseline has a real probability to be scored with Brier. The transform is monotone, so the
+    ranking metrics still measure the raw ordering."""
     from sklearn.linear_model import LogisticRegression
     from sklearn.pipeline import Pipeline
     from sklearn.preprocessing import StandardScaler
@@ -416,17 +401,11 @@ def cross_validated_predictions(
 ) -> list[dict[str, Any]]:
     """Stratified K-fold out-of-fold predictions over the whole calibration set.
 
-    The predeclared train/dev protocol evaluates the calibrator on 162 dev queries,
-    which contain only ~20 failures — too few for the raw-vs-calibrated comparison to be
-    decisive either way. Cross-validating over all 809 calibration queries yields an
-    out-of-fold prediction for every query (~100 failures), so the same comparison is made at
-    roughly five times the effective sample size.
-
-    This does not weaken any leakage rule: `beir/scifact/test` is still untouched, and within
-    each fold the scaler, the LogisticRegression, and the Platt baseline are all fitted on that
-    fold's training portion only and then applied to held-out queries they never saw. It is an
-    estimation-power change, not a model-selection change — thresholds remain selected on
-    calibration/dev by the predeclared rule.
+    The predeclared train/dev split leaves only ~20 failures to compare models on. Pooling
+    out-of-fold predictions over all 809 calibration queries raises that to ~120 without
+    weakening any leakage rule: every fold fits on its own training portion and predicts only
+    held-out queries, thresholds are still selected on calibration/dev, and the test split is
+    still untouched. An estimation-power change, not a model-selection one.
     """
     from sklearn.model_selection import StratifiedKFold
 
@@ -485,14 +464,10 @@ def confidence_metrics(
     """AUROC, AUPRC, Brier score. Returns None for AUROC/AUPRC if only one class is present
     (both are undefined in that case) rather than raising or silently returning a fake value.
 
-    Brier is only defined for calibrated probabilities, so `is_probability=False` (the raw
-    reranker score, which is not a probability) returns None for it rather
-    than rescaling the scores to fake a probability — use `fit_raw_score_calibrator` for a
-    baseline Brier. AUROC/AUPRC are rank-based and scale-free, so they are always reported.
-
-    `base_rate` and `auprc_over_base_rate` are reported alongside because AUPRC is bounded below
-    by the positive-class rate, not by 0.5: on this data a constant "always succeeds" predictor
-    already scores ~0.88 AUPRC. Reporting the raw AUPRC alone would overstate the calibrator."""
+    `is_probability=False` returns None for Brier rather than rescaling scores into a fake
+    probability; use `fit_raw_score_calibrator` for a baseline Brier. `auprc_over_base_rate` is
+    reported because AUPRC is bounded below by the positive-class rate, not by 0.5 — at this
+    success rate a constant predictor already scores ~0.88, so bare AUPRC flatters the model."""
     from sklearn.metrics import average_precision_score, brier_score_loss, roc_auc_score
 
     query_ids = sorted(probs)

@@ -355,12 +355,9 @@ CV_COMPARISONS = (
 
 
 def build_cv_bootstrap_artifact(runs_dir: str | Path = RUNS_DIR) -> dict[str, Any]:
-    """Bootstraps the raw-vs-calibrated comparison on pooled out-of-fold predictions.
-
-    Same paired query-level procedure as the predeclared analysis, but over all 809 calibration
-    queries instead of the 162-query dev split — roughly six times the failures, which is what
-    makes this comparison decisive where the dev-only version was not. Reported as a separate
-    artifact so it never overwrites the predeclared train/dev result."""
+    """Bootstraps the raw-vs-calibrated comparison on pooled out-of-fold predictions: the same
+    paired procedure as the predeclared analysis, over ~6x the failures. Written to its own
+    artifact so it can never be mistaken for the predeclared train/dev result."""
     rows: list[dict[str, Any]] = []
     provenance: dict[str, Any] = {}
     for pipeline in PIPELINES:

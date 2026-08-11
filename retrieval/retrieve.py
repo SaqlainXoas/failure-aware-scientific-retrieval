@@ -248,11 +248,12 @@ def _rows_by_query(rows: list[dict]) -> dict[str, list[str]]:
 def hybrid_retrieve(
     bm25_rows: list[dict], dense_rows: list[dict], k: int = 60, top_k: int | None = None
 ) -> list[dict]:
-    """Reciprocal Rank Fusion of two top-100 rankings; rank-based, so raw BM25/dense score scales are irrelevant.
+    """Reciprocal Rank Fusion of two rankings; rank-based, so BM25 and dense score scales
+    never have to be reconciled.
 
-    The fused list is truncated to `top_k` so hybrid emits the same candidate depth as bm25 and
-    dense. Depth has to match: the union of two 100-doc lists is up to 200 docs, and the Phase 4
-    within-query score normalization would otherwise use a different denominator for this pipeline.
+    Truncated to `top_k` so hybrid emits the same candidate depth as the other two pipelines —
+    the union of two 100-doc lists is up to 200, which would otherwise give the confidence
+    features a different normalization denominator here than elsewhere.
     """
     bm25_by_query = _rows_by_query(bm25_rows)
     dense_by_query = _rows_by_query(dense_rows)

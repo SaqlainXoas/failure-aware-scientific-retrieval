@@ -98,11 +98,8 @@ def _package_versions() -> dict[str, str | None]:
 
 
 def seed_everything(seed: int | None) -> None:
-    """Seeds Python/NumPy/Torch RNGs so `seed` in the config and manifest is a real control.
-
-    Nothing in this pipeline is stochastic today — frozen models, stable argsorts, explicit
-    doc_id tiebreaks — so this changes no result; it exists so the recorded seed is not a
-    decorative field, and so any future sampling inherits it."""
+    """Seeds Python/NumPy/Torch RNGs. Nothing here is stochastic today, so this changes no
+    result; it exists so the seed recorded in the manifest is not a decorative field."""
     if seed is None:
         return
     import random
@@ -118,10 +115,9 @@ def seed_everything(seed: int | None) -> None:
 def run_pipeline(
     config: dict[str, Any], data: dict[str, Any], device: str, force: bool
 ) -> tuple[list[dict], dict[str, bool], dict[str, list[dict]] | None, dict[str, Any]]:
-    """Dispatches on config['pipeline'] and returns (rankings rows, cache-hit flags,
-    raw per-retriever rows, retrieval params). raw_rows is only populated for hybrid_rrf (the
-    un-fused bm25/dense rows the confidence hybrid-overlap feature needs); None otherwise.
-    retrieval params carries the concrete BM25 scoring/tokenization settings for the manifest."""
+    """Dispatches on config['pipeline'], returning (rows, cache hits, raw per-retriever rows,
+    retrieval params). The raw rows exist only for hybrid_rrf, whose overlap confidence feature
+    needs the two un-fused rankings."""
     pipeline = config["pipeline"]
     corpus, queries = data["corpus"], data["queries"]
     candidate_depth = config.get("candidate_depth", 100)
@@ -404,12 +400,8 @@ def run_cross_validated_confidence(
     n_splits: int,
     seed: int,
 ) -> dict[str, Any]:
-    """Higher-powered secondary estimate of the same raw-vs-calibrated comparison.
-
-    The predeclared protocol evaluates on 162 dev queries holding ~20 failures, which is too
-    few to separate the models. Pooling out-of-fold predictions over all calibration queries
-    multiplies the failure count by roughly five without touching the test split. Reported
-    *alongside* the train/dev result, never as a replacement for it."""
+    """Higher-powered secondary estimate of the raw-vs-calibrated comparison, reported
+    *alongside* the predeclared train/dev result and never as a replacement for it."""
     predictions = cross_validated_predictions(
         features_by_query,
         labels_by_query,

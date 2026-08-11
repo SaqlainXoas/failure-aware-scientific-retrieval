@@ -101,16 +101,10 @@ def label_transition(
 def decomposition_metrics(labels: list[str]) -> dict[str, Any]:
     """Aggregates failure-decomposition rates from per-query transition labels.
 
-    Every rate except the two below is denominated over *all* queries in the split:
-    candidate_set_failure_rate / reranking_failure_rate / final_success_rate partition them
-    exactly. The two conditional rates are named for their denominator —
-    conditional_conversion_rate is final success among queries with a candidate-set opportunity,
-    and share_of_failures_from_candidate_set is the fraction of *final failures* that the
-    reranker never had a chance to fix — the headline quantity of the study. Both return 0.0
-    rather than raising when their denominator is empty.
-
-    Raw per-category counts and n_queries are returned alongside the rates so the
-    "transitions sum to the query count" invariant is checkable from the saved artifact.
+    Rates are denominated over all queries in the split, so candidate_set_failure_rate,
+    reranking_failure_rate, and final_success_rate partition them exactly. The two named for
+    their denominator are the exceptions: conditional_conversion_rate is conditioned on having
+    a candidate-set opportunity, and share_of_failures_from_candidate_set on having failed.
     """
     unknown = sorted(set(labels) - set(CATEGORIES))
     if unknown:

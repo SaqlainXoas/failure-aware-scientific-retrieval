@@ -1,8 +1,8 @@
 """Builds the result tables from saved run outputs on calibration-dev.
 
-Every number here is read out of a run directory's saved JSON — nothing is recomputed or
-typed by hand. Each table carries a provenance block naming the run
-directory, git commit, and model revisions it came from, because `runs/` is not tracked.
+Every number is read out of a run directory's saved JSON — nothing is recomputed or typed by
+hand. Each table carries a provenance block naming its run directory, git commit, and model
+revisions, because `runs/` is not tracked.
 """
 
 import json
@@ -224,12 +224,7 @@ def build_comparison_table(artifacts: dict[str, dict[str, Any]]) -> list[dict[st
 
 
 def build_decomposition_table(artifacts: dict[str, dict[str, Any]]) -> list[dict[str, Any]]:
-    """One row per pipeline, columns = the failure-decomposition rates.
-
-    All rates are denominated over every query in the split except the two conditional ones:
-    `conditional_conversion_rate` (denominator: queries with a top-50 opportunity) and
-    `share_of_failures_from_candidate_set` (denominator: final failures).
-    """
+    """One row per pipeline, columns = the failure-decomposition rates."""
     return [
         {
             "pipeline": pipeline,

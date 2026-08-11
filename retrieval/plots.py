@@ -131,9 +131,8 @@ def plot_failure_breakdown(
 ) -> None:
     """Where each pipeline's failures come from: a missing candidate, or a mis-ordered one.
 
-    Only the failing share of queries is drawn. Plotting the full 0-1 partition puts ~85% of
-    every bar in the success band and squashes the composition difference that is the point;
-    the success rate each bar excludes is printed above it instead.
+    Only the failing share is drawn — the full 0-1 partition puts ~85% of every bar in the
+    success band and squashes the composition difference that is the point.
     """
     import numpy as np
 
@@ -285,14 +284,11 @@ def _wilson_interval(successes: int, n: int, z: float = 1.96) -> tuple[float, fl
 def plot_reliability(
     predictions: list[dict[str, Any]], save_path: str | Path, metadata: dict[str, Any]
 ) -> None:
-    """Reliability diagram, one panel per model, for the train-fitted Platt baseline and the
-    primary common-feature calibrator.
+    """Reliability diagram, one panel per confidence model.
 
-    One panel each rather than both models overlaid: at 162 dev queries several low-probability
-    bins hold 2-5 queries, and two overlapping series of wide error bars are unreadable. Points
-    are deliberately not connected — a line through a 2-query bin turns sampling noise into an
-    apparent miscalibration trend. Marker area is proportional to bin count, so a small marker
-    with a tall interval reads as "not enough data here" rather than as a finding.
+    Points are deliberately not connected: a line through a 2-query bin turns sampling noise
+    into an apparent miscalibration trend. Marker area is proportional to bin count, so a small
+    marker with a tall interval reads as "too little data here" rather than as a finding.
     """
     plt = _pyplot()
     panels = (
