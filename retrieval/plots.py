@@ -23,7 +23,9 @@ def _pyplot():
     return plt
 
 
-def _save_figure(fig, save_path: str | Path, metadata: dict[str, Any] | None = None) -> None:
+def _save_figure(
+    fig, save_path: str | Path, metadata: dict[str, Any] | None = None, already_tight: bool = False
+) -> None:
     save_path = Path(save_path)
     save_path.parent.mkdir(parents=True, exist_ok=True)
     png_metadata = {
@@ -32,7 +34,8 @@ def _save_figure(fig, save_path: str | Path, metadata: dict[str, Any] | None = N
     }
     if metadata:
         png_metadata["Description"] = json.dumps(metadata, sort_keys=True)
-    fig.tight_layout()
+    if not already_tight:
+        fig.tight_layout()
     fig.savefig(save_path, dpi=150, metadata=png_metadata)
     _pyplot().close(fig)
 
@@ -97,16 +100,21 @@ def plot_failure_breakdown(
     candidate = np.array([row["candidate_set_failure_rate"] for row in rows])
     reranking = np.array([row["reranking_failure_rate"] for row in rows])
     success = np.array([row["final_success_rate"] for row in rows])
-    fig, ax = plt.subplots(figsize=(7.0, 4.5))
+    fig, ax = plt.subplots(figsize=(7.0, 5.0))
     ax.bar(pipelines, candidate, label="candidate-set failure")
     ax.bar(pipelines, reranking, bottom=candidate, label="reranking failure")
     ax.bar(pipelines, success, bottom=candidate + reranking, label="final top-10 success")
     ax.set_ylim(0.0, 1.0)
     ax.set_ylabel("share of queries")
-    ax.set_title("Candidate-set vs. reranking outcomes (calibration-dev)")
-    ax.legend(fontsize="small", loc="lower right")
+    # Every bar spans the full 0-1 range, so there is no empty region inside the axes for a
+    # legend to sit in without covering a data segment. The title lives at figure level
+    # (suptitle) and the legend just above the axes, with top margin reserved for both so
+    # they never overlap each other or the data.
+    fig.suptitle("Candidate-set vs. reranking outcomes (calibration-dev)", y=0.98)
+    ax.legend(fontsize="small", loc="lower center", bbox_to_anchor=(0.5, 1.02), ncol=3, frameon=False)
     ax.grid(axis="y", alpha=0.2)
-    _save_figure(fig, save_path, metadata)
+    fig.tight_layout(rect=(0.0, 0.0, 1.0, 0.97))
+    _save_figure(fig, save_path, metadata, already_tight=True)
 
 
 def plot_reranking_transitions(
@@ -180,45 +188,77 @@ def reliability_bins(
     return points
 
 
+def _wilson_interval(successes: int, n: int, z: float = 1.96) -> tuple[float, float]:
+    """95% Wilson score interval for a binomial rate — well-behaved at small n and at 0/1,
+    unlike a normal-approximation interval. Used so a 2-query bin visibly carries a wide
+    interval instead of implying the same precision as a 76-query bin."""
+    if n == 0:
+        return 0.0, 0.0
+    phat = successes / n
+    denom = 1 + z**2 / n
+    centre = (phat + z**2 / (2 * n)) / denom
+    half_width = (z * ((phat * (1 - phat) + z**2 / (4 * n)) / n) ** 0.5) / denom
+    return max(0.0, centre - half_width), min(1.0, centre + half_width)
+
+
 def plot_reliability(
     predictions: list[dict[str, Any]], save_path: str | Path, metadata: dict[str, Any]
 ) -> None:
-    """Reliability diagram for the train-fitted Platt and primary common-feature models."""
+    """Reliability diagram for the train-fitted Platt and primary common-feature models.
+
+    Bins are equal-width (`reliability_bins`, unchanged), but at this sample size (162
+    calibration-dev queries) several low-probability bins hold only 2-5 queries — connecting
+    those with a plain line makes ordinary small-sample noise look like a real miscalibration
+    pattern. Each point instead gets a 95% Wilson interval and a marker sized by its query
+    count, so a 2-query swing reads as uncertain and a 76-query point reads as a real signal."""
     plt = _pyplot()
-    fig, ax = plt.subplots(figsize=(6.5, 5.0))
-    ax.plot([0, 1], [0, 1], linestyle="--", color="0.55", label="perfect reliability")
-    for model, label, marker in (
-        ("raw_score_platt", "train-fitted Platt baseline", "o"),
-        ("calibrated", "common-feature calibrator", "s"),
+    fig, ax = plt.subplots(figsize=(7.0, 5.5))
+    ax.plot([0, 1], [0, 1], linestyle="--", color="0.55", label="perfect reliability", zorder=1)
+
+    for model, label, color, marker in (
+        ("raw_score_platt", "train-fitted Platt baseline", "tab:blue", "o"),
+        ("calibrated", "common-feature calibrator", "tab:orange", "s"),
     ):
         points = reliability_bins(predictions, model, n_bins=10)
-        ax.plot(
-            [point["mean_confidence"] for point in points],
-            [point["observed_success"] for point in points],
-            marker=marker,
-            label=label,
+        xs = [point["mean_confidence"] for point in points]
+        ys = [point["observed_success"] for point in points]
+        counts = [point["count"] for point in points]
+        intervals = [_wilson_interval(round(point["observed_success"] * point["count"]), point["count"]) for point in points]
+        lower_err = [y - lo for y, (lo, _hi) in zip(ys, intervals)]
+        upper_err = [hi - y for y, (_lo, hi) in zip(ys, intervals)]
+
+        ax.errorbar(
+            xs,
+            ys,
+            yerr=[lower_err, upper_err],
+            fmt="none",
+            ecolor=color,
+            elinewidth=1.0,
+            capsize=3,
+            alpha=0.5,
+            zorder=2,
         )
-        for point in points:
-            near_ceiling = point["observed_success"] >= 0.95
-            offset = (
-                (0, -12 if model == "raw_score_platt" else -24)
-                if near_ceiling
-                else (3, 4)
-            )
-            ax.annotate(
-                f"n={point['count']}",
-                (point["mean_confidence"], point["observed_success"]),
-                xytext=offset,
-                textcoords="offset points",
-                fontsize=7,
-                ha="center" if near_ceiling else "left",
-            )
+        ax.plot(xs, ys, linestyle=":", color=color, alpha=0.4, linewidth=1.0, zorder=2)
+        ax.scatter(
+            xs,
+            ys,
+            s=[18 + 6 * count for count in counts],
+            facecolor=color,
+            edgecolor="white",
+            linewidth=0.6,
+            marker=marker,
+            label=f"{label} (marker size ∝ bin n)",
+            zorder=3,
+        )
     ax.set_xlim(0.0, 1.0)
     ax.set_ylim(0.0, 1.0)
     ax.set_xlabel("mean predicted probability")
     ax.set_ylabel("observed final top-10 success rate")
-    ax.set_title("Hybrid reliability (10 fixed bins; empty bins omitted)")
-    ax.legend(fontsize="small")
+    ax.set_title(
+        "Hybrid reliability (10 fixed bins; error bars = 95% Wilson interval)",
+        fontsize=11,
+    )
+    ax.legend(fontsize="small", loc="lower right")
     ax.grid(alpha=0.2)
     _save_figure(fig, save_path, metadata)
 

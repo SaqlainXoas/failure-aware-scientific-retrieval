@@ -394,6 +394,68 @@ def predict_proba(calibrator, features_by_query: dict[str, dict[str, float]], fe
     return {qid: float(p) for qid, p in zip(query_ids, probs)}
 
 
+CV_FOLDS = 5
+
+
+def cross_validated_predictions(
+    features_by_query: dict[str, dict[str, float]],
+    labels_by_query: dict[str, bool],
+    baseline_by_query: dict[str, float],
+    feature_sets: dict[str, list[str]],
+    class_weight: str | None = None,
+    n_splits: int = CV_FOLDS,
+    seed: int = 42,
+) -> list[dict[str, Any]]:
+    """Stratified K-fold out-of-fold predictions over the whole calibration set.
+
+    The predeclared train/dev protocol (plan §9) evaluates the calibrator on 162 dev queries,
+    which contain only ~20 failures — too few for the raw-vs-calibrated comparison to be
+    decisive either way. Cross-validating over all 809 calibration queries yields an
+    out-of-fold prediction for every query (~100 failures), so the same comparison is made at
+    roughly five times the effective sample size.
+
+    This does not weaken any leakage rule: `beir/scifact/test` is still untouched, and within
+    each fold the scaler, the LogisticRegression, and the Platt baseline are all fitted on that
+    fold's training portion only and then applied to held-out queries they never saw. It is an
+    estimation-power change, not a model-selection change — thresholds remain selected on
+    calibration/dev by the predeclared rule.
+    """
+    from sklearn.model_selection import StratifiedKFold
+
+    query_ids = sorted(features_by_query)
+    labels = [labels_by_query[qid] for qid in query_ids]
+    splitter = StratifiedKFold(n_splits=n_splits, shuffle=True, random_state=seed)
+
+    rows_by_query: dict[str, dict[str, Any]] = {}
+    for fold, (train_index, test_index) in enumerate(splitter.split(query_ids, labels)):
+        train_ids = [query_ids[i] for i in train_index]
+        held_out_ids = [query_ids[i] for i in test_index]
+
+        train_labels = {qid: labels_by_query[qid] for qid in train_ids}
+        train_features = {qid: features_by_query[qid] for qid in train_ids}
+        held_out_features = {qid: features_by_query[qid] for qid in held_out_ids}
+        held_out_baseline = {qid: baseline_by_query[qid] for qid in held_out_ids}
+
+        platt = fit_raw_score_calibrator({qid: baseline_by_query[qid] for qid in train_ids}, train_labels)
+        fold_scores = {"raw_score_platt": apply_raw_score_calibrator(platt, held_out_baseline)}
+        for model, feature_names in feature_sets.items():
+            calibrator = fit_calibrator(
+                train_features, train_labels, feature_names, class_weight=class_weight
+            )
+            fold_scores[model] = predict_proba(calibrator, held_out_features, feature_names)
+
+        for qid in held_out_ids:
+            rows_by_query[qid] = {
+                "query_id": qid,
+                "fold": fold,
+                "raw_score": baseline_by_query[qid],
+                **{model: scores[qid] for model, scores in fold_scores.items()},
+                "final_success_10": labels_by_query[qid],
+            }
+
+    return [rows_by_query[qid] for qid in query_ids]
+
+
 def select_thresholds(
     probs: dict[str, float], coverage_levels: tuple[float, ...] = (1.0, 0.8, 0.6)
 ) -> dict[str, float]:
@@ -418,20 +480,29 @@ def confidence_metrics(
     Brier is only defined for calibrated probabilities, so `is_probability=False` (the raw
     reranker score, which plan §9 forbids treating as a probability) returns None for it rather
     than rescaling the scores to fake a probability — use `fit_raw_score_calibrator` for a
-    baseline Brier. AUROC/AUPRC are rank-based and scale-free, so they are always reported."""
+    baseline Brier. AUROC/AUPRC are rank-based and scale-free, so they are always reported.
+
+    `base_rate` and `auprc_over_base_rate` are reported alongside because AUPRC is bounded below
+    by the positive-class rate, not by 0.5: on this data a constant "always succeeds" predictor
+    already scores ~0.88 AUPRC. Reporting the raw AUPRC alone would overstate the calibrator."""
     from sklearn.metrics import average_precision_score, brier_score_loss, roc_auc_score
 
     query_ids = sorted(probs)
     y_true = [labels[qid] for qid in query_ids]
     y_score = [probs[qid] for qid in query_ids]
     single_class = len(set(y_true)) < 2
+    base_rate = (sum(y_true) / len(y_true)) if y_true else 0.0
+    auprc = None if single_class else average_precision_score(y_true, y_score)
 
     return {
         "auroc": None if single_class else roc_auc_score(y_true, y_score),
-        "auprc": None if single_class else average_precision_score(y_true, y_score),
+        "auprc": auprc,
+        "base_rate": base_rate,
+        "auprc_over_base_rate": None if auprc is None else auprc - base_rate,
         "brier": brier_score_loss(y_true, y_score) if is_probability else None,
         "is_probability": is_probability,
         "n_queries": len(query_ids),
+        "n_failures": len(y_true) - sum(y_true),
     }
 
 

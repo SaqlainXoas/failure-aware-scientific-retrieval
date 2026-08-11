@@ -17,8 +17,10 @@ import yaml
 
 from retrieval.confidence import (
     COMMON_FEATURES,
+    CV_FOLDS,
     HYBRID_FEATURES,
     apply_raw_score_calibrator,
+    cross_validated_predictions,
     confidence_metrics,
     extract_features,
     fit_calibrator,
@@ -356,6 +358,28 @@ def run_calibration(
         for query_id in sorted(dev_labels)
     ]
 
+    feature_sets = {"calibrated": primary_features}
+    if exploratory_features is not None:
+        feature_sets["calibrated_hybrid_exploratory"] = exploratory_features
+    # Everything above this line is the predeclared train/dev protocol and must never see a dev
+    # query during fitting. The cross-validated estimate below deliberately pools train+dev, so
+    # it is computed strictly after, and kept in its own key so the two can never be confused.
+    n_splits = int(config.get("confidence_cv_folds", CV_FOLDS))
+    cross_validated = (
+        run_cross_validated_confidence(
+            {**train_features, **dev_features},
+            {**train_labels, **dev_labels},
+            {**train_baseline, **dev_baseline},
+            feature_sets,
+            class_weight=class_weight,
+            coverage_levels=coverage_levels,
+            n_splits=n_splits,
+            seed=int(config.get("seed", 42)),
+        )
+        if n_splits >= 2
+        else None
+    )
+
     return {
         "estimators": estimators,
         "primary_model": "calibrated",
@@ -364,6 +388,51 @@ def run_calibration(
         "class_weight": class_weight,
         "fit_split": FIT_SPLIT,
         "eval_split": EVAL_SPLIT,
+        "results": results,
+        "predictions": predictions,
+        "cross_validated": cross_validated,
+    }
+
+
+def run_cross_validated_confidence(
+    features_by_query: dict[str, dict[str, float]],
+    labels_by_query: dict[str, bool],
+    baseline_by_query: dict[str, float],
+    feature_sets: dict[str, list[str]],
+    class_weight: str | None,
+    coverage_levels: tuple[float, ...],
+    n_splits: int,
+    seed: int,
+) -> dict[str, Any]:
+    """Higher-powered secondary estimate of the same raw-vs-calibrated comparison.
+
+    The predeclared protocol evaluates on 162 dev queries holding ~20 failures, which is too
+    few to separate the models. Pooling out-of-fold predictions over all calibration queries
+    multiplies the failure count by roughly five without touching the test split. Reported
+    *alongside* the train/dev result, never as a replacement for it."""
+    predictions = cross_validated_predictions(
+        features_by_query,
+        labels_by_query,
+        baseline_by_query,
+        feature_sets,
+        class_weight=class_weight,
+        n_splits=n_splits,
+        seed=seed,
+    )
+    model_names = ["raw_score", "raw_score_platt", *feature_sets]
+    pooled = {
+        name: {row["query_id"]: row[name] for row in predictions} for name in model_names
+    }
+    results = {
+        name: _score_model(scores, labels_by_query, coverage_levels, is_probability=(name != "raw_score"))
+        for name, scores in pooled.items()
+    }
+    return {
+        "protocol": f"stratified {n_splits}-fold cross-validation over calibration-train + calibration-dev",
+        "n_splits": n_splits,
+        "seed": seed,
+        "n_queries": len(predictions),
+        "n_failures": sum(1 for row in predictions if not row["final_success_10"]),
         "results": results,
         "predictions": predictions,
     }
@@ -516,7 +585,39 @@ def write_run_dir(
             run_dir / "risk_coverage.png",
         )
 
+        cross_validated = calibration.get("cross_validated")
+        if cross_validated is not None:
+            _write_cv_artifacts(run_dir, calibration, cross_validated)
+
     return run_dir
+
+
+def _write_cv_artifacts(run_dir: Path, calibration: dict, cross_validated: dict) -> None:
+    """Cross-validated confidence artifacts, kept in separate files from the predeclared
+    train/dev ones so a reader can never mistake the pooled estimate for the protocol result."""
+    (run_dir / "confidence_cv_metrics.json").write_text(
+        json.dumps(
+            {
+                "protocol": cross_validated["protocol"],
+                "n_splits": cross_validated["n_splits"],
+                "seed": cross_validated["seed"],
+                "n_queries": cross_validated["n_queries"],
+                "n_failures": cross_validated["n_failures"],
+                "primary_model": calibration["primary_model"],
+                "models": {
+                    name: result["confidence_metrics"]
+                    for name, result in cross_validated["results"].items()
+                },
+                "selective_results": {
+                    name: result["selective_results"]
+                    for name, result in cross_validated["results"].items()
+                },
+            },
+            indent=2,
+        )
+        + "\n"
+    )
+    _write_jsonl(run_dir / "confidence_cv_predictions.jsonl", cross_validated["predictions"])
 
 
 def _capture_logs() -> io.StringIO:
@@ -609,6 +710,20 @@ def main(argv: list[str] | None = None) -> None:
             calibration["eval_split"],
             json.dumps(
                 {name: result["confidence_metrics"] for name, result in calibration["results"].items()},
+                indent=2,
+            ),
+        )
+        cross_validated = calibration["cross_validated"]
+        logger.info(
+            "Cross-validated confidence (%s, %s queries / %s failures): %s",
+            cross_validated["protocol"],
+            cross_validated["n_queries"],
+            cross_validated["n_failures"],
+            json.dumps(
+                {
+                    name: result["confidence_metrics"]
+                    for name, result in cross_validated["results"].items()
+                },
                 indent=2,
             ),
         )

@@ -345,6 +345,126 @@ def build_bootstrap_artifact(
     }
 
 
+CV_COMPARISONS = (
+    ("cv_auroc_raw_vs_common_calibrated", "auroc", "raw_reranker_score", "common_feature_calibrated", "raw_score", "calibrated", False, True),
+    ("cv_auprc_raw_vs_common_calibrated", "auprc", "raw_reranker_score", "common_feature_calibrated", "raw_score", "calibrated", False, True),
+    ("cv_brier_platt_vs_common_calibrated", "brier", "train_fitted_platt", "common_feature_calibrated", "raw_score_platt", "calibrated", True, True),
+)
+
+
+def build_cv_bootstrap_artifact(runs_dir: str | Path = RUNS_DIR) -> dict[str, Any]:
+    """Bootstraps the raw-vs-calibrated comparison on pooled out-of-fold predictions.
+
+    Same paired query-level procedure as the predeclared analysis, but over all 809 calibration
+    queries instead of the 162-query dev split — roughly six times the failures, which is what
+    makes this comparison decisive where the dev-only version was not. Reported as a separate
+    artifact so it never overwrites the predeclared train/dev result."""
+    rows: list[dict[str, Any]] = []
+    provenance: dict[str, Any] = {}
+    for pipeline in PIPELINES:
+        run_dir = _latest_run_dirs(runs_dir, CALIBRATION_SPLIT).get(pipeline)
+        if run_dir is None or not (run_dir / "confidence_cv_predictions.jsonl").exists():
+            continue
+        provenance[pipeline] = _source_provenance(run_dir)
+        predictions = _load_jsonl(run_dir / "confidence_cv_predictions.jsonl")
+        query_ids = [row["query_id"] for row in predictions]
+        labels = {row["query_id"]: bool(row["final_success_10"]) for row in predictions}
+        by_query = {row["query_id"]: row for row in predictions}
+
+        for comparison_id, metric, label_a, label_b, field_a, field_b, prob_a, prob_b in CV_COMPARISONS:
+            result = _rounded_bootstrap(
+                bootstrap_score_comparison(
+                    labels,
+                    {qid: float(by_query[qid][field_a]) for qid in query_ids},
+                    {qid: float(by_query[qid][field_b]) for qid in query_ids},
+                    metric=metric,
+                    side_a_is_probability=prob_a,
+                    side_b_is_probability=prob_b,
+                    n_resamples=BOOTSTRAP_RESAMPLES,
+                    confidence_level=BOOTSTRAP_CONFIDENCE_LEVEL,
+                    seed=BOOTSTRAP_SEED,
+                )
+            )
+            excludes_zero = result["ci_lower"] > 0.0 or result["ci_upper"] < 0.0
+            rows.append(
+                {
+                    "comparison_id": f"{pipeline}_{comparison_id}",
+                    "pipeline": pipeline,
+                    "metric": metric,
+                    "side_a_label": f"{pipeline}:{label_a}",
+                    "side_b_label": f"{pipeline}:{label_b}",
+                    **result,
+                    "excludes_zero": excludes_zero,
+                    "n_failures": sum(1 for qid in query_ids if not labels[qid]),
+                }
+            )
+    return {
+        "protocol": "stratified 5-fold cross-validation over calibration-train + calibration-dev",
+        "why": (
+            "The predeclared train/dev protocol evaluates on 162 queries holding ~20 failures, "
+            "too few to separate the confidence models. Pooling out-of-fold predictions over all "
+            "calibration queries raises the failure count without touching the test split."
+        ),
+        "bootstrap": {
+            "unit": "query_id",
+            "paired": True,
+            "difference_direction": "B - A",
+            "n_resamples": BOOTSTRAP_RESAMPLES,
+            "confidence_level": BOOTSTRAP_CONFIDENCE_LEVEL,
+            "interval": "percentile",
+            "seed": BOOTSTRAP_SEED,
+        },
+        "provenance": provenance,
+        "rows": rows,
+    }
+
+
+def render_cv_bootstrap_markdown(payload: dict[str, Any]) -> str:
+    columns = [
+        "comparison_id",
+        "metric",
+        "point_estimate_a",
+        "point_estimate_b",
+        "difference",
+        "ci_lower",
+        "ci_upper",
+        "excludes_zero",
+        "n_queries",
+        "n_failures",
+    ]
+    lines = [
+        "# Cross-validated bootstrap intervals (higher-powered secondary analysis)",
+        "",
+        payload["why"],
+        "",
+        (
+            f"Protocol: {payload['protocol']}. Difference: `B - A`. "
+            f"{payload['bootstrap']['n_resamples']} paired resamples, "
+            f"{payload['bootstrap']['confidence_level']:.0%} percentile intervals, "
+            f"seed {payload['bootstrap']['seed']}."
+        ),
+        "",
+        "| " + " | ".join(columns) + " |",
+        "| " + " | ".join("---" for _ in columns) + " |",
+    ]
+    float_columns = {"point_estimate_a", "point_estimate_b", "difference", "ci_lower", "ci_upper"}
+    for row in payload["rows"]:
+        lines.append(
+            "| "
+            + " | ".join(
+                f"{row[column]:.6f}" if column in float_columns else str(row[column])
+                for column in columns
+            )
+            + " |"
+        )
+    provenance = ", ".join(
+        f"`{name}` → `{source['run_dir']}` @ `{source['git_commit']}`"
+        for name, source in payload["provenance"].items()
+    )
+    lines.extend(["", f"Sources: {provenance}.", ""])
+    return "\n".join(lines)
+
+
 def render_bootstrap_markdown(payload: dict[str, Any]) -> str:
     columns = [
         "comparison_id",
@@ -709,6 +829,16 @@ def write_phase5_artifacts(
     dev_runs, confidence_run = _phase5_source_runs(runs_dir)
     bootstrap = build_bootstrap_artifact(runs_dir, splits_dir)
     write_bootstrap_artifact(bootstrap, tables_dir)
+
+    cv_bootstrap = build_cv_bootstrap_artifact(runs_dir)
+    if cv_bootstrap["rows"]:
+        destination = Path(tables_dir)
+        (destination / "cv_bootstrap_intervals.json").write_text(
+            json.dumps(cv_bootstrap, indent=2) + "\n"
+        )
+        (destination / "cv_bootstrap_intervals.md").write_text(
+            render_cv_bootstrap_markdown(cv_bootstrap)
+        )
 
     selection = build_failure_case_selection_artifact(
         confidence_run,
