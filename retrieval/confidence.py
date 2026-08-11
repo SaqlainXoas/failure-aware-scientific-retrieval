@@ -133,15 +133,16 @@ def bootstrap_score_comparison(
     confidence_level: float = 0.95,
     seed: int = 42,
 ) -> dict[str, float | int]:
-    """Paired AUPRC or Brier bootstrap for two confidence signals on the same queries.
+    """Paired AUROC, AUPRC, or Brier bootstrap for two confidence signals on the same queries.
 
-    Brier comparisons require genuine probabilities on both sides. In particular, the raw
-    cross-encoder score is never silently normalized or treated as a probability.
+    AUROC and AUPRC are rank-based, so they are valid for the un-normalized raw cross-encoder
+    score. Brier comparisons require genuine probabilities on both sides — the raw score is
+    never silently normalized or treated as a probability.
     """
-    from sklearn.metrics import average_precision_score
+    from sklearn.metrics import average_precision_score, roc_auc_score
 
-    if metric not in {"auprc", "brier"}:
-        raise ValueError("metric must be 'auprc' or 'brier'")
+    if metric not in {"auroc", "auprc", "brier"}:
+        raise ValueError("metric must be 'auroc', 'auprc' or 'brier'")
     if metric == "brier" and not (side_a_is_probability and side_b_is_probability):
         raise ValueError("Brier bootstrap requires probability scores on both sides")
 
@@ -160,8 +161,15 @@ def bootstrap_score_comparison(
                 (float(probability) - float(target)) ** 2
                 for probability, target in zip(y_score, y_true)
             )
+        # A resample can be single-class; AUROC/AUPRC are undefined there, so fall back to the
+        # degenerate-but-defined value rather than dropping the resample (which would bias the
+        # interval toward whichever side survives more often).
         if not any(y_true):
             return 0.0
+        if metric == "auroc":
+            if all(y_true):
+                return 0.5
+            return float(roc_auc_score(y_true, y_score))
         return float(average_precision_score(y_true, y_score))
 
     return paired_query_bootstrap(
