@@ -198,7 +198,8 @@ uv run pytest
 
 On Apple Silicon the dense and reranking stages use MPS automatically. Corpus embeddings, the
 BM25 index, and reranker scores are cached in `.cache/`, so only the first run of each pipeline
-pays the model cost.
+pays the model cost — a cold BM25 calibration-dev run takes about a minute on an M-series
+laptop, and the calibration-train runs are four times the queries.
 
 ## Longer write-up
 
