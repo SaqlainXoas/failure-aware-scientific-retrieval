@@ -200,6 +200,12 @@ On Apple Silicon the dense and reranking stages use MPS automatically. Corpus em
 BM25 index, and reranker scores are cached in `.cache/`, so only the first run of each pipeline
 pays the model cost.
 
+## Longer write-up
+
+[`paper/report.md`](paper/report.md) is a 4–6 page version of this study with the full method,
+the qualitative failure analysis, and the reasoning behind each choice. See
+[`paper/README.md`](paper/README.md) for the one-line pandoc build.
+
 ## Layout
 
 ```
@@ -221,6 +227,7 @@ results/figures/   5 figures, with figure_provenance.json naming their source ru
 results/manifests/ the manifest of every run backing a committed number
 analysis/          experiment log, and 12 hand-annotated failure cases
 splits/            the committed calibration query IDs
+paper/             the longer write-up
 ```
 
 Every committed number traces to a run directory, a git commit, and a model revision through

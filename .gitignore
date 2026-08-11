@@ -21,5 +21,9 @@ runs/*
 !runs/.gitkeep
 .cache/
 
+# Built report; the Markdown source is what's tracked
+paper/report.html
+paper/report.pdf
+
 # macOS
 .DS_Store
