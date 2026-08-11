@@ -7,12 +7,9 @@ import numpy as np
 import pytest
 
 import retrieval.analysis as analysis_module
-from retrieval.analysis import (
-    build_bootstrap_artifact,
-    load_failure_case_data,
-    render_bootstrap_markdown,
-    select_failure_cases,
-)
+import retrieval.cases as cases_module
+from retrieval.analysis import build_bootstrap_artifact, render_bootstrap_markdown
+from retrieval.cases import load_failure_case_data, select_failure_cases
 from retrieval.confidence import (
     bootstrap_mean_comparison,
     bootstrap_score_comparison,
@@ -438,7 +435,7 @@ def test_failure_case_loader_uses_train_and_committed_dev_ids(tmp_path, monkeypa
             raise AssertionError("Final test must not be loaded")
         return train
 
-    monkeypatch.setattr(analysis_module, "load_scifact_split", fake_load)
+    monkeypatch.setattr(cases_module, "load_scifact_split", fake_load)
 
     result = load_failure_case_data(tmp_path)
 
