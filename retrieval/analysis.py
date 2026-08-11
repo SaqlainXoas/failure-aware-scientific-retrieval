@@ -400,6 +400,164 @@ def build_cv_bootstrap_artifact(runs_dir: str | Path = RUNS_DIR) -> dict[str, An
     }
 
 
+FINAL_TEST_SPLIT = "test"
+
+
+def build_final_test_bootstrap(runs_dir: str | Path = RUNS_DIR) -> dict[str, Any]:
+    """Paired bootstrap over the held-out split, for the same comparisons the protocol fixed.
+
+    Returns empty rows when no held-out run exists, so the artifact pipeline stays runnable
+    for anyone who has not opened that split.
+    """
+    test_runs = latest_run_dirs(runs_dir, FINAL_TEST_SPLIT)
+    if not all(pipeline in test_runs for pipeline in PIPELINES):
+        return {"split": FINAL_TEST_SPLIT, "rows": [], "provenance": {}}
+
+    query_rows = {
+        pipeline: rows_by_query_id(_load_parquet(run_dir / "query_results.parquet"))
+        for pipeline, run_dir in test_runs.items()
+    }
+    query_ids = sorted(query_rows[PRIMARY_PIPELINE])
+    for pipeline, rows in query_rows.items():
+        if sorted(rows) != query_ids:
+            raise ValueError(f"{pipeline} held-out query IDs differ from the primary pipeline")
+
+    rows: list[dict[str, Any]] = []
+
+    def add(comparison_id, metric, values_a, values_b, labels):
+        result = _rounded_bootstrap(
+            bootstrap_mean_comparison(
+                values_a,
+                values_b,
+                n_resamples=BOOTSTRAP_RESAMPLES,
+                confidence_level=BOOTSTRAP_CONFIDENCE_LEVEL,
+                seed=BOOTSTRAP_SEED,
+            )
+        )
+        rows.append(
+            {
+                "comparison_id": comparison_id,
+                "metric": metric,
+                "side_a_label": labels[0],
+                "side_b_label": labels[1],
+                **result,
+                "excludes_zero": bool(
+                    result["ci_lower"] > 0.0 or result["ci_upper"] < 0.0
+                ),
+                "split": FINAL_TEST_SPLIT,
+            }
+        )
+
+    for pipeline in PIPELINES:
+        for metric in ("recall@10", "ndcg@10"):
+            add(
+                f"{pipeline}_{metric.replace('@', '_at_')}_before_after",
+                metric,
+                {q: float(query_rows[pipeline][q][f"first_stage_{metric}"]) for q in query_ids},
+                {q: float(query_rows[pipeline][q][f"reranked_{metric}"]) for q in query_ids},
+                labels=(f"{pipeline}:first_stage", f"{pipeline}:reranked"),
+            )
+
+    for index, pipeline_a in enumerate(PIPELINES):
+        for pipeline_b in PIPELINES[index + 1 :]:
+            add(
+                f"final_success_10_{pipeline_a}_vs_{pipeline_b}",
+                "final_success_10",
+                {q: float(query_rows[pipeline_a][q]["final_success_10"]) for q in query_ids},
+                {q: float(query_rows[pipeline_b][q]["final_success_10"]) for q in query_ids},
+                labels=(f"{pipeline_a}:final_success_10", f"{pipeline_b}:final_success_10"),
+            )
+
+    for pipeline in PIPELINES:
+        predictions = rows_by_query_id(
+            load_jsonl(test_runs[pipeline] / "confidence_predictions.jsonl")
+        )
+        labels_by_query = {q: bool(predictions[q]["final_success_10"]) for q in query_ids}
+        raw = {q: float(predictions[q]["raw_score"]) for q in query_ids}
+        platt = {q: float(predictions[q]["raw_score_platt"]) for q in query_ids}
+        calibrated = {q: float(predictions[q]["calibrated"]) for q in query_ids}
+        for metric, side_a, label_a, is_probability_a in (
+            ("auroc", raw, "raw_reranker_score", False),
+            ("auprc", raw, "raw_reranker_score", False),
+            ("brier", platt, "train_fitted_platt", True),
+        ):
+            result = _rounded_bootstrap(
+                bootstrap_score_comparison(
+                    labels_by_query,
+                    side_a,
+                    calibrated,
+                    metric=metric,
+                    side_a_is_probability=is_probability_a,
+                    side_b_is_probability=True,
+                    n_resamples=BOOTSTRAP_RESAMPLES,
+                    confidence_level=BOOTSTRAP_CONFIDENCE_LEVEL,
+                    seed=BOOTSTRAP_SEED,
+                )
+            )
+            rows.append(
+                {
+                    "comparison_id": f"{pipeline}_{metric}_raw_vs_common_calibrated",
+                    "metric": metric,
+                    "side_a_label": f"{pipeline}:{label_a}",
+                    "side_b_label": f"{pipeline}:common_feature_calibrated",
+                    **result,
+                    "excludes_zero": bool(
+                        result["ci_lower"] > 0.0 or result["ci_upper"] < 0.0
+                    ),
+                    "split": FINAL_TEST_SPLIT,
+                }
+            )
+
+    return {
+        "split": FINAL_TEST_SPLIT,
+        "fit_split": CALIBRATION_SPLIT,
+        "protocol": (
+            "single pre-registered evaluation on the held-out split; models fitted on "
+            "calibration-train, thresholds carried over from calibration-dev"
+        ),
+        "bootstrap": {
+            "n_resamples": BOOTSTRAP_RESAMPLES,
+            "confidence_level": BOOTSTRAP_CONFIDENCE_LEVEL,
+            "seed": BOOTSTRAP_SEED,
+        },
+        "provenance": {p: source_provenance(d) for p, d in test_runs.items()},
+        "rows": rows,
+    }
+
+
+def render_final_test_markdown(payload: dict[str, Any]) -> str:
+    columns = [
+        "comparison_id",
+        "metric",
+        "point_estimate_a",
+        "point_estimate_b",
+        "difference",
+        "95% CI",
+        "excludes_zero",
+        "n_queries",
+    ]
+    headers = [c if c == "95% CI" else column_label(c) for c in columns]
+    lines = [
+        "# Held-out test split — paired bootstrap intervals",
+        "",
+        "Single pre-registered evaluation of `beir/scifact/test`. Confidence models were fitted "
+        "on calibration-train and never refitted; display thresholds come from calibration-dev. "
+        "Difference: `B - A`.",
+        "",
+        f"{payload['bootstrap']['n_resamples']} paired resamples, "
+        f"{payload['bootstrap']['confidence_level']:.0%} percentile intervals, "
+        f"seed {payload['bootstrap']['seed']}.",
+        "",
+        *_bootstrap_table_lines(payload["rows"], columns, headers),
+    ]
+    provenance = ", ".join(
+        f"`{name}` → `{source['run_dir']}` @ `{source['git_commit']}`"
+        for name, source in payload["provenance"].items()
+    )
+    lines.extend(["", f"Sources: {provenance}.", ""])
+    return "\n".join(lines)
+
+
 def _interval_cell(row: dict[str, Any]) -> str:
     """The two interval bounds as one `[lo, hi]` cell — an interval is read as a unit, and two
     separate columns make the reader reassemble it."""
@@ -535,6 +693,16 @@ def write_phase5_artifacts(
         )
         (destination / "cv_bootstrap_intervals.md").write_text(
             render_cv_bootstrap_markdown(cv_bootstrap)
+        )
+
+    final_test = build_final_test_bootstrap(runs_dir)
+    if final_test["rows"]:
+        destination = Path(tables_dir)
+        (destination / "final_test_bootstrap.json").write_text(
+            json.dumps(final_test, indent=2) + "\n"
+        )
+        (destination / "final_test_bootstrap.md").write_text(
+            render_final_test_markdown(final_test)
         )
 
     selection = build_failure_case_selection_artifact(

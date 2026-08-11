@@ -21,7 +21,15 @@ from retrieval.confidence import (
     select_thresholds,
     selective_results_at_coverage,
 )
-from retrieval.data import load_config, load_scifact_split, resolve_device, resolve_split, setup_logging
+from retrieval.data import (
+    FINAL_TEST_SPLIT,
+    load_config,
+    load_final_test_split,
+    load_scifact_split,
+    resolve_device,
+    resolve_split,
+    setup_logging,
+)
 from retrieval.evaluate import decomposition_metrics, evaluate_query, label_transition
 from retrieval.rerank import rerank
 from retrieval.retrieve import bm25_retrieve, dense_retrieve, hybrid_retrieve
@@ -228,6 +236,33 @@ def _score_model(
     }
 
 
+def transfer_thresholds(
+    dev_scores: dict[str, float],
+    eval_scores: dict[str, float],
+    eval_labels: dict[str, bool],
+    coverage_levels: tuple[float, ...],
+) -> dict[str, dict[str, float]]:
+    """Applies thresholds chosen on calibration-dev to a later split, unchanged.
+
+    Reporting selective accuracy at a *coverage* recomputed on the evaluation split quietly uses
+    that split to place the cutoff. Carrying the dev threshold over instead is the deployable
+    version of the question — you must pick a cutoff before seeing the queries — and the
+    coverage it actually achieves is itself a result.
+    """
+    results = {}
+    for coverage in coverage_levels:
+        threshold = select_thresholds(dev_scores, (coverage,))[str(coverage)]
+        kept = [qid for qid, score in eval_scores.items() if score >= threshold]
+        successes = sum(1 for qid in kept if eval_labels[qid])
+        results[str(coverage)] = {
+            "dev_threshold": threshold,
+            "n_kept": len(kept),
+            "achieved_coverage": len(kept) / len(eval_scores) if eval_scores else 0.0,
+            "success_rate": successes / len(kept) if kept else 0.0,
+        }
+    return results
+
+
 def run_calibration(
     config: dict[str, Any],
     train_features: dict[str, dict[str, float]],
@@ -237,9 +272,14 @@ def run_calibration(
     dev_labels: dict[str, bool],
     dev_transition_labels: dict[str, str],
     dev_reranked_rows: list[dict],
+    eval_split: str = EVAL_SPLIT,
 ) -> dict[str, Any]:
     """Fits every model on calibration-train only; every threshold and metric below is computed
-    on calibration-dev, never on train.
+    on the evaluation split, never on the fitting split.
+
+    `eval_split` names the split the `dev_*` arguments came from. It is calibration-dev for the
+    predeclared protocol and the held-out split for the single final evaluation; the fitting
+    side is calibration-train in both cases, so the fitted models are literally the same.
 
     Four models are reported side by side and never conflated: the raw top-1 reranker score
     (ranking metrics only — it is not a probability), the same score after train-fitted Platt
@@ -320,7 +360,7 @@ def run_calibration(
         "feature_names": feature_names,
         "class_weight": class_weight,
         "fit_split": FIT_SPLIT,
-        "eval_split": EVAL_SPLIT,
+        "eval_split": eval_split,
         "results": results,
         "predictions": predictions,
         "cross_validated": cross_validated,
@@ -376,7 +416,16 @@ def main(argv: list[str] | None = None) -> None:
     logger.info("Loaded config from %s for split %s: %s", args.config, args.split, config)
 
     train_data = load_scifact_split("train")
-    data = resolve_split(args.split, train_data, splits_dir=config.get("splits_dir", "splits"))
+    splits_dir = config.get("splits_dir", "splits")
+    if args.split == FINAL_TEST_SPLIT:
+        logger.warning(
+            "Opening the held-out %s split. Under the pre-registered protocol this is a "
+            "one-time evaluation with every model and threshold already locked.",
+            FINAL_TEST_SPLIT,
+        )
+        data = load_final_test_split()
+    else:
+        data = resolve_split(args.split, train_data, splits_dir=splits_dir)
     device = resolve_device(config.get("device", "auto"))
 
     rows, cache_hits, raw_rows, retrieval_params = run_pipeline(config, data, device, args.force)
@@ -396,36 +445,83 @@ def main(argv: list[str] | None = None) -> None:
         features_by_query,
     )
 
+    def evaluate_other_split(split_name: str) -> tuple[dict, dict, dict, dict, dict]:
+        """Runs one more split through the same frozen pipeline, for fitting or for scoring."""
+        other = resolve_split(split_name, train_data, splits_dir=splits_dir)
+        other_rows, hits_a, other_raw, _ = run_pipeline(config, other, device, args.force)
+        other_reranked, hits_b = run_reranking(config, other, other_rows, device, args.force)
+        other_label_rows = compute_query_labels(
+            other_rows, other_reranked, other["qrels"], rerank_depth
+        )
+        return (
+            run_confidence_features(other_rows, other_reranked, other_raw, rerank_depth),
+            {row["query_id"]: row["final_success_10"] for row in other_label_rows},
+            {row["query_id"]: row["transition_label"] for row in other_label_rows},
+            other_reranked,
+            {**hits_a, **hits_b},
+        )
+
+    own_labels = {label["query_id"]: label["final_success_10"] for label in labels}
+    own_transitions = {label["query_id"]: label["transition_label"] for label in labels}
+
     calibration = None
+    cache_hits = {**cache_hits, **rerank_cache_hits}
     if args.split == FIT_SPLIT:
         # Confidence models are fitted here and *only* here: this branch reads calibration-train
         # for fitting and calibration-dev for every threshold and metric. Nothing is ever fitted
         # on the split it is scored on.
-        dev_data = resolve_split(EVAL_SPLIT, train_data, splits_dir=config.get("splits_dir", "splits"))
-        dev_rows, dev_cache_hits, dev_raw_rows, _ = run_pipeline(config, dev_data, device, args.force)
-        dev_reranked_rows, dev_rerank_cache_hits = run_reranking(config, dev_data, dev_rows, device, args.force)
-        dev_labels_list = compute_query_labels(dev_rows, dev_reranked_rows, dev_data["qrels"], rerank_depth)
-        dev_features_by_query = run_confidence_features(
-            dev_rows, dev_reranked_rows, dev_raw_rows, rerank_depth
+        dev_features, dev_labels, dev_transitions, dev_reranked, dev_hits = evaluate_other_split(
+            EVAL_SPLIT
         )
-        train_labels = {label["query_id"]: label["final_success_10"] for label in labels}
-        dev_labels = {label["query_id"]: label["final_success_10"] for label in dev_labels_list}
-        dev_transition_labels = {
-            label["query_id"]: label["transition_label"] for label in dev_labels_list
-        }
         calibration = run_calibration(
             config,
             features_by_query,
-            train_labels,
+            own_labels,
             reranked_rows,
-            dev_features_by_query,
+            dev_features,
             dev_labels,
-            dev_transition_labels,
-            dev_reranked_rows,
+            dev_transitions,
+            dev_reranked,
         )
-        cache_hits = {**cache_hits, **rerank_cache_hits, **dev_cache_hits, **dev_rerank_cache_hits}
-    else:
-        cache_hits = {**cache_hits, **rerank_cache_hits}
+        cache_hits = {**cache_hits, **dev_hits}
+    elif args.split == FINAL_TEST_SPLIT:
+        # The single held-out evaluation. The fitting side is still calibration-train and the
+        # models are the same ones the predeclared protocol produced; only the scored split
+        # differs. Thresholds are carried over from calibration-dev rather than re-chosen here.
+        fit_features, fit_labels, _, fit_reranked, fit_hits = evaluate_other_split(FIT_SPLIT)
+        dev_features, dev_labels, _, dev_reranked, dev_hits = evaluate_other_split(EVAL_SPLIT)
+        calibration = run_calibration(
+            config,
+            fit_features,
+            fit_labels,
+            fit_reranked,
+            features_by_query,
+            own_labels,
+            own_transitions,
+            reranked_rows,
+            eval_split=FINAL_TEST_SPLIT,
+        )
+        dev_calibration = run_calibration(
+            config,
+            fit_features,
+            fit_labels,
+            fit_reranked,
+            dev_features,
+            dev_labels,
+            {qid: "" for qid in dev_labels},
+            dev_reranked,
+        )
+        coverage_levels = tuple(config.get("confidence_coverage_levels", [1.0, 0.8, 0.6]))
+        calibration["dev_threshold_transfer"] = {
+            name: transfer_thresholds(
+                {p["query_id"]: p[name] for p in dev_calibration["predictions"]},
+                {p["query_id"]: p[name] for p in calibration["predictions"]},
+                own_labels,
+                coverage_levels,
+            )
+            for name in ("raw_score", "calibrated")
+        }
+        cache_hits = {**cache_hits, **fit_hits, **dev_hits}
 
     manifest = build_manifest(
         config,

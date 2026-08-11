@@ -80,11 +80,15 @@ _SPLIT_FILES = {
 }
 
 
+FINAL_TEST_SPLIT = "test"
+
+
 def resolve_split(split_arg: str, train_data: dict[str, Any], splits_dir: str | Path = SPLITS_DIR) -> dict[str, Any]:
     """Filters the full train split's queries/qrels down to one calibration split's query IDs.
 
-    The test split stays untouched, so only calibration-dev/calibration-train are
-    recognized here — there is no code path that can reach it.
+    Only the two calibration splits are addressable here. The held-out split is deliberately
+    *not* reachable through this function — it has its own loader, `load_final_test_split`, so
+    that no calibration code path can reach it by passing a different string.
     """
     if split_arg not in _SPLIT_FILES:
         raise ValueError(
@@ -95,6 +99,23 @@ def resolve_split(split_arg: str, train_data: dict[str, Any], splits_dir: str | 
         "corpus": train_data["corpus"],
         "queries": {qid: text for qid, text in train_data["queries"].items() if qid in query_ids},
         "qrels": {qid: grades for qid, grades in train_data["qrels"].items() if qid in query_ids},
+    }
+
+
+def load_final_test_split() -> dict[str, Any]:
+    """Loads the held-out `beir/scifact/test` split, restricted to queries with a positive qrel.
+
+    Separate from `resolve_split` on purpose: reaching the held-out data requires calling a
+    differently named function, so no calibration code path can arrive here by passing an
+    unexpected split string. Under the pre-registered protocol this is evaluated exactly once,
+    after retrieval, configs, features, and the primary-pipeline rule were all locked.
+    """
+    data = load_scifact_split("test")
+    evaluable = set(evaluable_query_ids(data["qrels"]))
+    return {
+        "corpus": data["corpus"],
+        "queries": {qid: text for qid, text in data["queries"].items() if qid in evaluable},
+        "qrels": {qid: grades for qid, grades in data["qrels"].items() if qid in evaluable},
     }
 
 

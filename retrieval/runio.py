@@ -120,7 +120,8 @@ def build_manifest(
     manifest["calibrated"] = calibrated
     if calibrated:
         manifest["confidence_fit_split"] = FIT_SPLIT
-        manifest["confidence_eval_split"] = EVAL_SPLIT
+        # The fitting split never changes; only the scored split does, so record which one it was.
+        manifest["confidence_eval_split"] = split if split != FIT_SPLIT else EVAL_SPLIT
     return manifest
 
 
@@ -214,6 +215,20 @@ def write_run_dir(
             {name: result["risk_coverage"] for name, result in calibration["results"].items()},
             run_dir / "risk_coverage.png",
         )
+
+        transfer = calibration.get("dev_threshold_transfer")
+        if transfer is not None:
+            (run_dir / "threshold_transfer.json").write_text(
+                json.dumps(
+                    {
+                        "threshold_source_split": EVAL_SPLIT,
+                        "eval_split": calibration["eval_split"],
+                        "models": transfer,
+                    },
+                    indent=2,
+                )
+                + "\n"
+            )
 
         cross_validated = calibration.get("cross_validated")
         if cross_validated is not None:

@@ -5,18 +5,22 @@ fails to surface the right scientific abstract, is the abstract missing from the
 or is it retrieved and then mis-ranked? And can a cheap calibrator predict which queries will
 fail better than the reranker's own score?
 
-Four findings, on 162 held-out calibration queries with frozen off-the-shelf models:
+Four findings, with frozen off-the-shelf models. Everything was developed on 809 calibration
+queries; the 300-query SciFact test split was opened **once**, at the end, with every model and
+threshold already locked. Both sets of numbers are reported below.
 
-1. **Hybrid retrieval has the best candidate recall** — Recall@50 of 0.966, against 0.948 for
-   dense and 0.873 for BM25.
-2. **Cross-encoder reranking does not improve final ranking quality here, and measurably hurts
-   it for dense retrieval** — nDCG@10 falls by 0.044 (95% CI [−0.081, −0.009]).
-3. **As first-stage recall improves, the bottleneck moves to the reranker.** 76% of BM25's
+1. **Hybrid retrieval has the best candidate recall** — Recall@50 of 0.966 on calibration and
+   0.944 held-out, against 0.925 for dense and 0.869 for BM25 held-out.
+2. **As first-stage recall improves, the bottleneck moves to the reranker.** 76% of BM25's
    failures are queries where the gold abstract was never retrieved; for hybrid that drops to
-   25%. Better retrieval does not reduce failures so much as relocate them.
-4. **An 8-feature logistic calibrator ranks failure risk better than the raw reranker score,
-   but states worse probabilities.** AUROC improves by 0.065–0.083 across all three pipelines
-   with every interval excluding zero, while Brier gets worse by 0.048–0.058.
+   25% (held-out: 67% → 34%). Better retrieval does not reduce failures so much as relocate them.
+3. **Cross-encoder reranking does not reliably improve final ranking quality here.** On held-out
+   data no before/after difference is significant for any pipeline. The stronger claim visible on
+   calibration data — that reranking significantly *degrades* dense nDCG@10 — did not replicate.
+4. **An 8-feature logistic calibrator ranks failure risk better than the raw reranker score, but
+   states worse probabilities.** The Brier degradation is significant everywhere, including
+   held-out (+0.048 to +0.075). The AUROC advantage is consistent in direction everywhere and
+   significant only in the higher-powered cross-validated estimate.
 
 The last is the honest headline: the calibrator is **better at ranking which queries will fail,
 worse at saying how likely one is to fail.**
@@ -76,8 +80,10 @@ binding constraint.
 | hybrid_rrf | 0.864 → 0.870 | 0.751 → 0.726 | −0.026 |
 
 A general-domain MS MARCO cross-encoder applied to scientific claims is not a free improvement.
-Only the dense drop has an interval excluding zero ([bootstrap
-intervals](results/tables/bootstrap_intervals.md)), but no pipeline shows a gain.
+On calibration data only the dense drop has an interval excluding zero ([bootstrap
+intervals](results/tables/bootstrap_intervals.md)) — and that drop **did not replicate** on the
+held-out split, where the same comparison is −0.017 with an interval crossing zero. What survives
+in both is the weaker claim: no pipeline shows a significant gain from reranking.
 
 **Can failure be predicted?** ([full table](results/tables/cv_bootstrap_intervals.md))
 
@@ -98,6 +104,33 @@ quality for minority-class recall; it was left in place rather than tuned away a
 
 The calibrator's curve sits above the diagonal almost everywhere — it systematically
 under-states success, which is exactly what a worse Brier at better AUROC looks like.
+
+## Held-out evaluation
+
+The 300-query SciFact test split was opened once, after every retriever, feature, model, and
+selection rule was locked. Nothing was refitted: the calibrator is the calibration-train model,
+and the abstention thresholds are the ones chosen on calibration-dev.
+([full table](results/tables/final_test_bootstrap.md))
+
+| | Calibration | Held-out | Replicated? |
+| --- | --- | --- | --- |
+| Best Recall@50 | hybrid, 0.966 | hybrid, 0.944 | yes — the primary-pipeline rule holds out of sample |
+| Failures from candidate set | 76% → 25% | 67% → 34% | yes — same ordering and direction |
+| Hybrid vs BM25 final success | +0.031, CI touches 0 | **+0.027, CI [+0.003, +0.050]** | yes — stronger held-out |
+| Reranking hurts dense nDCG@10 | −0.044, CI [−0.081, −0.009] | −0.017, CI [−0.043, +0.012] | **no** |
+| Calibrator Brier worse | +0.048 to +0.058 | **+0.048 to +0.075** | yes — significant on all three |
+| Calibrator AUROC better | +0.065 to +0.083 (CV) | +0.034 to +0.049, CIs cross 0 | direction yes, power no |
+
+Two results are worth stating plainly. The failure-decomposition story and the calibration
+weakness both survive held-out evaluation. The claim that reranking actively *degrades* dense
+retrieval did not — it was a calibration-set effect, and the README above has been weakened
+accordingly rather than kept because it was the more interesting sentence.
+
+There is also a practical finding the calibration data could not show. Carrying the
+calibration-dev abstention threshold over to held-out queries unchanged, the calibrator lands
+much closer to its target coverage than the raw score does — at a 60% target it keeps 58.0% of
+queries against the raw score's 48.3%. Its probability scale transfers across splits even though
+its Brier is worse, which is what makes it the more usable of the two for routing.
 
 ## Method
 
@@ -143,10 +176,14 @@ were written down before the first run. So was the rule for choosing the primary
 highest calibration-dev Recall@50, which selected hybrid.
 
 The scaler and the logistic regression are fitted on calibration-train only. Thresholds are
-selected on calibration-dev only. No feature is derived from relevance judgments. There is no
-code path that can load `beir/scifact/test`; the split resolver rejects it, and a test asserts
-that it does. The test split has never been opened, so this repository makes no held-out
-generalisation claim.
+selected on calibration-dev only. No feature is derived from relevance judgments. The
+calibration loader cannot reach held-out data — `resolve_split` rejects `test`, and a test
+asserts it — so opening that split required calling a separately named function, once, on
+purpose, and it is recorded in the log.
+
+The held-out evaluation was run after everything was locked, and nothing was changed in response
+to it. Where a held-out result contradicted a calibration-set result, the calibration-set claim
+was weakened, not the other way round.
 
 Where a result came out badly — reranking hurting nDCG, the calibrator's Brier being worse —
 the setting was left as predeclared and the result reported. [`analysis/experiment_log.md`](analysis/experiment_log.md)
@@ -164,7 +201,10 @@ is the dated record of every such decision, including the ones made after seeing
   as a failure here. Several such cases appear in [the case study](analysis/failure_cases.md).
 - **Confidence predicts retrieval, not correctness.** The target is "did we retrieve the
   annotated evidence", not "is the claim true".
-- **The test split is unopened**, so every number above is a calibration-set number.
+- **The held-out split is spent.** It was evaluated once and will not be used again, so any
+  further change to this system cannot be validated the same way.
+- **300 held-out queries hold ~50 failures**, which is why the AUROC comparison is directionally
+  consistent there but not individually significant.
 
 ## Reproducing
 

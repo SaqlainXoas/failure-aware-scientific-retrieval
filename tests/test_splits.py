@@ -67,11 +67,21 @@ def test_validate_calibration_splits_rejects_incomplete_coverage():
 
 @pytest.mark.parametrize("split_arg", ["test", "beir/scifact/test", "train", "calibration_dev"])
 def test_resolve_split_refuses_anything_but_the_two_calibration_splits(split_arg):
-    # The test split stays unreachable until retrieval, configs, features, and
-    # model-selection rules are locked, and opening it is a logged one-time event.
+    # Held-out data is not reachable by passing a different string to the calibration loader.
+    # It has its own named function, so opening it is always an explicit, greppable act.
     train_data = {"corpus": {}, "queries": {"q1": "a"}, "qrels": {"q1": {"d1": 1}}}
     with pytest.raises(ValueError, match="Unknown split"):
         resolve_split(split_arg, train_data)
+
+
+def test_final_test_split_has_a_separate_deliberate_loader():
+    # The guard above is only meaningful if the held-out path is a distinct, named entry point
+    # rather than a branch inside the calibration loader.
+    from retrieval import data as data_module
+
+    assert data_module.FINAL_TEST_SPLIT == "test"
+    assert callable(data_module.load_final_test_split)
+    assert "test" not in data_module._SPLIT_FILES
 
 
 def test_resolve_split_filters_queries_and_qrels_to_the_split(tmp_path):

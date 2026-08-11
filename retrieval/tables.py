@@ -372,6 +372,44 @@ def write_run_manifests(
     return written
 
 
+FINAL_TEST_SPLIT = "test"
+
+
+def write_final_test_tables(
+    runs_dir: str | Path = RUNS_DIR, tables_dir: str | Path = TABLES_DIR
+) -> bool:
+    """Held-out equivalents of the calibration tables, written only if that split was opened.
+
+    Same builders as the calibration tables, pointed at the held-out runs, so the two sets are
+    computed by identical code and are directly comparable.
+    """
+    artifacts = load_run_artifacts(runs_dir, split=FINAL_TEST_SPLIT)
+    if not all(pipeline in artifacts for pipeline in PIPELINES):
+        return False
+
+    _write_table(
+        build_comparison_table(artifacts), ["pipeline", *METRIC_COLUMNS],
+        "final_test_first_stage", artifacts, FINAL_TEST_SPLIT, tables_dir,
+    )
+    _write_table(
+        build_decomposition_table(artifacts), ["pipeline", *DECOMPOSITION_COLUMNS],
+        "final_test_failure_decomposition", artifacts, FINAL_TEST_SPLIT, tables_dir,
+    )
+    _write_table(
+        build_rerank_delta_table(artifacts), ["pipeline", *DELTA_COLUMNS],
+        "final_test_rerank_deltas", artifacts, FINAL_TEST_SPLIT, tables_dir,
+    )
+    confidence = load_confidence_artifacts(runs_dir, split=FINAL_TEST_SPLIT)
+    if confidence:
+        _write_table(
+            build_confidence_table(confidence),
+            ["pipeline", "is_primary_pipeline", "model", "model_role",
+             "auroc", "auprc", "brier", "n_queries"],
+            "final_test_confidence", confidence, FINAL_TEST_SPLIT, tables_dir,
+        )
+    return True
+
+
 def main(runs_dir: str | Path = RUNS_DIR, tables_dir: str | Path = TABLES_DIR) -> None:
     from retrieval.analysis import write_phase5_artifacts
 
@@ -441,6 +479,7 @@ def main(runs_dir: str | Path = RUNS_DIR, tables_dir: str | Path = TABLES_DIR) -
             tables_dir,
         )
 
+    write_final_test_tables(runs_dir, tables_dir)
     write_run_manifests(runs_dir, Path(tables_dir).parent / "manifests")
     write_phase5_artifacts(
         runs_dir=runs_dir,

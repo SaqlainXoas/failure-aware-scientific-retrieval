@@ -1,0 +1,70 @@
+{
+  "split": "test",
+  "provenance": {
+    "bm25": {
+      "run_dir": "2026-08-11T090932.212943Z_bm25_test",
+      "git_commit": "f1607e09ee6bd99ba9eee931b7daf7aefef5ac16",
+      "git_dirty": true,
+      "timestamp_utc": "2026-08-11T09:09:32Z",
+      "model_revision": null,
+      "reranker_revision": "c5ee24cb16019beea0893ab7796b1df96625c6b8",
+      "candidate_depth": 100,
+      "rerank_depth": 50
+    },
+    "dense_bge": {
+      "run_dir": "2026-08-11T090935.698926Z_dense_bge_test",
+      "git_commit": "f1607e09ee6bd99ba9eee931b7daf7aefef5ac16",
+      "git_dirty": true,
+      "timestamp_utc": "2026-08-11T09:09:35Z",
+      "model_revision": "5c38ec7c405ec4b44b94cc5a9bb96e735b38267a",
+      "reranker_revision": "c5ee24cb16019beea0893ab7796b1df96625c6b8",
+      "candidate_depth": 100,
+      "rerank_depth": 50
+    },
+    "hybrid_rrf": {
+      "run_dir": "2026-08-11T090939.130196Z_hybrid_rrf_test",
+      "git_commit": "f1607e09ee6bd99ba9eee931b7daf7aefef5ac16",
+      "git_dirty": true,
+      "timestamp_utc": "2026-08-11T09:09:39Z",
+      "model_revision": "5c38ec7c405ec4b44b94cc5a9bb96e735b38267a",
+      "reranker_revision": "c5ee24cb16019beea0893ab7796b1df96625c6b8",
+      "candidate_depth": 100,
+      "rerank_depth": 50
+    }
+  },
+  "rows": [
+    {
+      "pipeline": "bm25",
+      "candidate_set_failure_rate": 0.12333333333333334,
+      "reranking_failure_rate": 0.06,
+      "final_success_rate": 0.8166666666666667,
+      "opportunity_rate": 0.8766666666666667,
+      "rescue_rate": 0.05,
+      "degradation_rate": 0.03,
+      "conditional_conversion_rate": 0.9315589353612167,
+      "share_of_failures_from_candidate_set": 0.6727272727272727
+    },
+    {
+      "pipeline": "dense_bge",
+      "candidate_set_failure_rate": 0.07,
+      "reranking_failure_rate": 0.09333333333333334,
+      "final_success_rate": 0.8366666666666667,
+      "opportunity_rate": 0.93,
+      "rescue_rate": 0.03333333333333333,
+      "degradation_rate": 0.043333333333333335,
+      "conditional_conversion_rate": 0.899641577060932,
+      "share_of_failures_from_candidate_set": 0.42857142857142855
+    },
+    {
+      "pipeline": "hybrid_rrf",
+      "candidate_set_failure_rate": 0.05333333333333334,
+      "reranking_failure_rate": 0.10333333333333333,
+      "final_success_rate": 0.8433333333333334,
+      "opportunity_rate": 0.9466666666666667,
+      "rescue_rate": 0.05333333333333334,
+      "degradation_rate": 0.04666666666666667,
+      "conditional_conversion_rate": 0.8908450704225352,
+      "share_of_failures_from_candidate_set": 0.3404255319148936
+    }
+  ]
+}

@@ -12,13 +12,15 @@ abstract: |
   fusion gives the best candidate recall (Recall@50 0.966 vs. 0.948 dense and 0.873 BM25), but
   final top-10 success rises only from 84.6% to 87.7%, because the composition of the remaining
   failures inverts: 76% of BM25's failures are candidate-set failures against 25% of hybrid's.
-  A general-domain MS MARCO cross-encoder does not improve final ranking on this data and
-  significantly degrades dense nDCG@10 (−0.044, 95% CI [−0.081, −0.009]). Finally, an
-  eight-feature logistic calibrator over retrieval-internal signals predicts which queries will
-  fail significantly better than the reranker's own score (AUROC +0.065 to +0.083, all
-  intervals excluding zero) while producing significantly worse-calibrated probabilities
-  (Brier +0.048 to +0.058). All definitions, leakage rules, and statistical comparisons were
-  fixed before any result existed, and the SciFact test split was never opened.
+  A general-domain MS MARCO cross-encoder does not reliably improve final ranking on this data.
+  Finally, an eight-feature logistic calibrator over retrieval-internal signals predicts which
+  queries will fail better than the reranker's own score (AUROC +0.065 to +0.083 under
+  cross-validation, all intervals excluding zero) while producing significantly worse-calibrated
+  probabilities (Brier +0.048 to +0.058). All definitions, leakage rules, and statistical
+  comparisons were fixed before any result existed, and the 300-query SciFact test split was
+  opened exactly once, at the end, with every model and threshold already locked. The
+  decomposition result and the calibration weakness both replicate held-out; a calibration-set
+  finding that reranking significantly degrades dense nDCG@10 does not, and is reported as such.
 ---
 
 # 1. Introduction
@@ -53,10 +55,16 @@ calibration-dev queries, by sorting the query IDs and shuffling with `random.Ran
 sorting before shuffling makes the split independent of `ir_datasets` iteration order across
 versions. The resulting query-ID files are committed.
 
-The 300-query test split was never opened. It is not merely unused: the split resolver accepts
-only the two calibration split names and raises on anything else, and a unit test asserts that
-`test` and `beir/scifact/test` are both unreachable. Consequently every number in this report is
-a calibration-set number, and no claim about held-out generalisation is made.
+The 300-query test split was held out for the entire development of the study and opened exactly
+once, at the end, for the evaluation in §3.5. It was not merely unused: the calibration split
+resolver accepts only the two calibration split names and raises on anything else, including
+`test` and `beir/scifact/test`, and a unit test asserts this. Reaching the held-out data requires
+calling a separately named loader, so opening it is an explicit and greppable act rather than a
+string argument away. All 300 test queries have at least one positive judgment.
+
+Sections 3.1–3.4 report calibration-set results, which is where every design decision was made.
+Section 3.5 reports the single held-out evaluation. Nothing was refitted for it and nothing was
+changed in response to it.
 
 ## 2.2 Pipelines
 
@@ -197,15 +205,21 @@ shifted to the reranker.
 | Dense (BGE) | +0.001 | **−0.044** | [−0.081, −0.009] |
 | Hybrid (RRF) | +0.006 | −0.026 | [−0.062, +0.010] |
 
-Recall@10 changes are small and every interval crosses zero. nDCG@10 falls for all three, and
-for dense the interval lies entirely below zero. The transition counts explain the mechanism:
-the reranker rescues 5, 4, and 7 queries respectively and degrades 3, 5, and 6 — roughly a
-wash in count, but the degradations cost more nDCG than the rescues recover, because a rescue
-typically moves a document to a mid-top-10 position while a degradation removes a document that
-was already ranked highly.
+Recall@10 changes are small and every interval crosses zero. nDCG@10 falls for all three, and on
+calibration data the dense interval lies entirely below zero. The transition counts explain the
+mechanism: the reranker rescues 5, 4, and 7 queries respectively and degrades 3, 5, and 6 —
+roughly a wash in count, but the degradations cost more nDCG than the rescues recover, because a
+rescue typically moves a document to a mid-top-10 position while a degradation removes a
+document that was already ranked highly.
 
-This is a transfer result, not a verdict on cross-encoders. `ms-marco-MiniLM-L6-v2` is trained
-on general-domain web passages; applying it unmodified to scientific claims is not free.
+The dense degradation is the one calibration-set result in this report that does not survive
+held-out evaluation (§3.5), where the same comparison is −0.017 with an interval crossing zero.
+The claim this study supports is therefore the weaker one — reranking does not reliably improve
+final ranking quality on this data — and not that it actively degrades it.
+
+Either way this is a transfer result, not a verdict on cross-encoders. `ms-marco-MiniLM-L6-v2`
+is trained on general-domain web passages; applying it unmodified to scientific claims is not
+free, but neither is it clearly harmful.
 
 ## 3.4 Predicting failure
 
@@ -252,6 +266,61 @@ raises success from 87.7% to 97.9%, against 94.8% for the same coverage under th
 calibrator's advantage appears where abstention is aggressive, which is consistent with its
 better ranking and worse absolute probabilities.
 
+## 3.5 Held-out evaluation
+
+The test split was opened once, after §§3.1–3.4 were complete and every model, feature, and
+threshold was fixed. The confidence models are the calibration-train models, used unchanged; the
+abstention thresholds are the ones selected on calibration-dev. No configuration was altered in
+response to anything below.
+
+**First stage.** The primary-pipeline rule survives out of sample: hybrid again has the highest
+Recall@50, at 0.944 against 0.925 for dense and 0.869 for BM25. Absolute numbers are 2–5 points
+lower than on calibration data across the board, as expected for a split never used for any
+decision.
+
+**Failure decomposition.** The composition shift replicates with the same ordering and a smaller
+spread. Share of failures originating in the candidate set: BM25 67.3%, dense 42.9%, hybrid
+34.0% (calibration: 76.0%, 38.1%, 25.0%). Final top-10 success is 81.7%, 83.7%, 84.3%.
+
+**Pipeline comparison.** Hybrid's final success exceeds BM25's by +0.027 with a 95% interval of
+[+0.003, +0.050] — excluding zero, where the corresponding calibration interval had merely
+touched it. This is the one comparison that is *stronger* held-out.
+
+**Reranking.** No before/after comparison is significant for any pipeline. BM25 nDCG@10 rises
++0.022 [−0.008, +0.052], dense falls −0.017 [−0.043, +0.012], hybrid falls −0.004
+[−0.034, +0.024]. The significant dense degradation reported in §3.3 did not replicate.
+
+**Confidence.** The calibration failure replicates decisively and the discrimination advantage
+replicates only in direction:
+
+| Pipeline | AUROC raw → cal. | 95% CI | Brier Platt → cal. | 95% CI |
+| --- | ---: | ---: | ---: | ---: |
+| BM25 | 0.767 → 0.811 | [−0.005, +0.092] | 0.131 → 0.179 | **[+0.018, +0.078]** |
+| Dense | 0.783 → 0.831 | [−0.017, +0.120] | 0.113 → 0.166 | **[+0.024, +0.084]** |
+| Hybrid | 0.750 → 0.784 | [−0.028, +0.102] | 0.119 → 0.194 | **[+0.043, +0.107]** |
+
+All three AUROC differences are positive and none is individually significant at 300 queries
+holding roughly 50 failures — the same power problem that made the predeclared calibration-dev
+comparison inconclusive, and the reason the cross-validated estimate in §3.4 exists. Held-out
+data agrees in direction with that estimate without being able to confirm it alone. The Brier
+degradation, by contrast, is significant on every pipeline and on every split tested.
+
+**Threshold transfer.** One question only held-out data can answer: does an abstention threshold
+chosen on calibration-dev still deliver its intended coverage on unseen queries? Carrying the
+hybrid thresholds over unchanged:
+
+| Target coverage | Raw score kept | Calibrator kept |
+| --- | ---: | ---: |
+| 80% | 74.0% | 71.7% |
+| 60% | 48.3% | **58.0%** |
+
+The calibrator's cutoff transfers substantially better at the aggressive setting, landing within
+two points of its target where the raw score undershoots by twelve. Its probability scale is
+stable across splits even though its Brier score is worse — the two are not in conflict, since
+Brier penalises absolute miscalibration while threshold transfer depends on the score
+distribution keeping its shape. For the routing use case this study cares about, the transferable
+cutoff is the property that matters.
+
 # 4. Qualitative analysis
 
 Twelve hybrid calibration-dev queries were selected by fixed rules before any case text was
@@ -296,22 +365,31 @@ evidence about MS MARCO → SciFact transfer specifically.
 class weighting, but no unweighted ablation was run, so that attribution is an interpretation
 rather than a measurement.
 
-**The test split is unopened.** Everything here is a calibration-set result. This is a
-deliberate cost: it preserves the option of a genuinely held-out evaluation later, at the price
-of not having one now.
+**The held-out split is spent.** It was evaluated once, as designed, and will not be used again.
+Any further change to this system cannot be validated the same way, and the 300-query held-out
+result is itself modest in power — roughly 50 failures, enough to confirm the Brier degradation
+and the pipeline comparison but not the AUROC advantage.
+
+**One claim was weakened by held-out data.** The dense reranking degradation in §3.3 is reported
+because it is what the calibration data showed and because the pre-registration fixed that
+comparison in advance; §3.5 records that it did not replicate. A reader should treat the
+calibration-set effect sizes throughout §3 as the optimistic end of the range.
 
 # 6. Conclusion
 
 Decomposing retrieval failure changes what the aggregate numbers mean. Hybrid fusion looks like
 a modest 3-point improvement in final success over BM25; the decomposition shows it nearly
 eliminates one failure mode while a second grows to replace it, leaving the reranker as the
-binding constraint. A general-domain cross-encoder, the standard second stage, does not improve
-final ranking on this data and significantly degrades it for dense retrieval. And failure is
-predictable from retrieval-internal signals alone — the calibrator ranks at-risk queries
-significantly better than the reranker's own score, while stating significantly worse
-probabilities than a one-parameter Platt baseline.
+binding constraint. That shift replicates on held-out data. A general-domain cross-encoder, the
+standard second stage, does not reliably improve final ranking here. And failure is predictable
+from retrieval-internal signals alone — the calibrator ranks at-risk queries better than the
+reranker's own score and carries a usable abstention threshold across splits, while stating
+significantly worse probabilities than a one-parameter Platt baseline.
 
-Two of the three headline results are negative. They are reported as findings.
+Two of the three headline results are negative. They are reported as findings. A fourth result,
+that reranking significantly degrades dense retrieval, appeared on calibration data and did not
+survive held-out evaluation; it is reported as not replicating rather than quietly dropped,
+because the pre-registration fixed that comparison before any number existed.
 
 ---
 
