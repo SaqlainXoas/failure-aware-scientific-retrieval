@@ -228,7 +228,7 @@ def test_reliability_bins_are_fixed_and_include_probability_one():
 def test_five_figures_generate_from_small_saved_fixtures(tmp_path):
     metadata = {"split": "calibration-dev", "source_runs": {"fixture": "run"}}
     first_stage = [
-        {"pipeline": name, "recall@10": 0.5, "recall@50": 0.8, "ndcg@10": 0.6}
+        {"pipeline": name, "recall@10": 0.5, "recall@50": 0.8, "ndcg@10": 0.6, "n_queries": 4}
         for name in ("bm25", "dense_bge", "hybrid_rrf")
     ]
     decomposition = [

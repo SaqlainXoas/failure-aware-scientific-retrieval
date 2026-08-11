@@ -12,6 +12,31 @@ LABELS = {
     "calibrated_hybrid_exploratory": "calibrated + BM25/dense overlap (exploratory)",
 }
 
+# Okabe-Ito, which stays distinguishable under the common forms of colour blindness. One fixed
+# colour per pipeline across every figure, so a reader learns the mapping once.
+PIPELINE_COLORS = {"bm25": "#0072B2", "dense_bge": "#D55E00", "hybrid_rrf": "#009E73"}
+CANDIDATE_FAILURE_COLOR = "#4C566A"
+RERANKING_FAILURE_COLOR = "#D55E00"
+MODEL_COLORS = {"raw_score": "#0072B2", "raw_score_platt": "#0072B2", "calibrated": "#D55E00"}
+
+_FIGURE_WIDTH = 6.5  # inches; at dpi 150 this is ~975px, which is README column width
+
+_STYLE = {
+    "font.size": 9,
+    "axes.titlesize": 11,
+    "axes.labelsize": 9.5,
+    "legend.fontsize": 8.5,
+    "xtick.labelsize": 9,
+    "ytick.labelsize": 9,
+    "axes.spines.top": False,
+    "axes.spines.right": False,
+    "axes.grid": False,
+    "grid.alpha": 0.25,
+    "grid.linewidth": 0.6,
+    "legend.frameon": False,
+    "figure.dpi": 150,
+}
+
 
 def _pyplot():
     os.environ.setdefault("MPLCONFIGDIR", str(Path(".cache/matplotlib").resolve()))
@@ -20,6 +45,7 @@ def _pyplot():
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
 
+    plt.rcParams.update(_STYLE)
     return plt
 
 
@@ -68,86 +94,141 @@ def plot_first_stage_performance(
 
     plt = _pyplot()
     metrics = ["recall@10", "recall@50", "ndcg@10"]
-    labels = ["Recall@10", "Recall@50", "nDCG@10"]
-    pipelines = [row["pipeline"] for row in rows]
-    positions = np.arange(len(pipelines))
-    width = 0.24
-    fig, ax = plt.subplots(figsize=(7.0, 4.5))
-    for offset, (metric, label) in enumerate(zip(metrics, labels)):
-        ax.bar(
+    metric_labels = ["Recall@10", "Recall@50", "nDCG@10"]
+    positions = np.arange(len(metrics))
+    width = 0.26
+    fig, ax = plt.subplots(figsize=(_FIGURE_WIDTH, 3.8))
+    # Grouped by metric rather than by pipeline: the comparison a reader wants is
+    # "which retriever wins this metric", which is a within-group read.
+    for offset, row in enumerate(rows):
+        values = [row[metric] for metric in metrics]
+        bars = ax.bar(
             positions + (offset - 1) * width,
-            [row[metric] for row in rows],
+            values,
             width,
-            label=label,
+            label=row["pipeline"],
+            color=PIPELINE_COLORS.get(row["pipeline"]),
         )
-    ax.set_xticks(positions, pipelines)
-    ax.set_ylim(0.0, 1.0)
+        ax.bar_label(bars, fmt="%.3f", padding=2, fontsize=7.5, color="0.25")
+    ax.set_xticks(positions, metric_labels)
+    ax.set_ylim(0.0, 1.08)
+    ax.set_yticks([0.0, 0.2, 0.4, 0.6, 0.8, 1.0])
     ax.set_ylabel("score")
-    ax.set_title("First-stage retrieval performance (calibration-dev)")
-    ax.legend(fontsize="small")
-    ax.grid(axis="y", alpha=0.2)
+    ax.set_title(
+        f"First-stage retrieval, before reranking ({rows[0]['n_queries']} calibration-dev queries)",
+        pad=26,
+    )
+    # Every bar starts at zero, so there is no gap inside the axes wide enough for a legend
+    # that does not cover data; it goes above the axes instead.
+    ax.legend(loc="lower center", bbox_to_anchor=(0.5, 1.005), ncol=3)
+    ax.grid(axis="y")
+    ax.set_axisbelow(True)
     _save_figure(fig, save_path, metadata)
 
 
 def plot_failure_breakdown(
     rows: list[dict[str, Any]], save_path: str | Path, metadata: dict[str, Any]
 ) -> None:
-    """Stacked all-query partition: candidate failure, reranking failure, final success."""
+    """Where each pipeline's failures come from: a missing candidate, or a mis-ordered one.
+
+    Only the failing share of queries is drawn. Plotting the full 0-1 partition puts ~85% of
+    every bar in the success band and squashes the composition difference that is the point;
+    the success rate each bar excludes is printed above it instead.
+    """
     import numpy as np
 
     plt = _pyplot()
     pipelines = [row["pipeline"] for row in rows]
     candidate = np.array([row["candidate_set_failure_rate"] for row in rows])
     reranking = np.array([row["reranking_failure_rate"] for row in rows])
-    success = np.array([row["final_success_rate"] for row in rows])
-    fig, ax = plt.subplots(figsize=(7.0, 5.0))
-    ax.bar(pipelines, candidate, label="candidate-set failure")
-    ax.bar(pipelines, reranking, bottom=candidate, label="reranking failure")
-    ax.bar(pipelines, success, bottom=candidate + reranking, label="final top-10 success")
-    ax.set_ylim(0.0, 1.0)
-    ax.set_ylabel("share of queries")
-    # Every bar spans the full 0-1 range, so there is no empty region inside the axes for a
-    # legend to sit in without covering a data segment. The title lives at figure level
-    # (suptitle) and the legend just above the axes, with top margin reserved for both so
-    # they never overlap each other or the data.
-    fig.suptitle("Candidate-set vs. reranking outcomes (calibration-dev)", y=0.98)
-    ax.legend(fontsize="small", loc="lower center", bbox_to_anchor=(0.5, 1.02), ncol=3, frameon=False)
-    ax.grid(axis="y", alpha=0.2)
-    fig.tight_layout(rect=(0.0, 0.0, 1.0, 0.97))
-    _save_figure(fig, save_path, metadata, already_tight=True)
+    total = candidate + reranking
+
+    fig, ax = plt.subplots(figsize=(_FIGURE_WIDTH, 4.0))
+    ax.bar(pipelines, candidate, width=0.55, label="candidate-set failure — gold not in top 50",
+           color=CANDIDATE_FAILURE_COLOR)
+    ax.bar(pipelines, reranking, bottom=candidate, width=0.55,
+           label="reranking failure — gold retrieved, not in final top 10",
+           color=RERANKING_FAILURE_COLOR)
+
+    for index, row in enumerate(rows):
+        if candidate[index] > 0.012:
+            ax.text(index, candidate[index] / 2, f"{candidate[index]:.1%}",
+                    ha="center", va="center", color="white", fontsize=8.5)
+        if reranking[index] > 0.012:
+            ax.text(index, candidate[index] + reranking[index] / 2, f"{reranking[index]:.1%}",
+                    ha="center", va="center", color="white", fontsize=8.5)
+        # Derived from the two plotted quantities rather than read from the artifact, so the
+        # annotation can never disagree with the bar it sits on.
+        share = candidate[index] / total[index] if total[index] else 0.0
+        ax.text(index, total[index] + 0.006,
+                f"{share:.0%} of failures\nfrom the candidate set",
+                ha="center", va="bottom", fontsize=8, color="0.3")
+
+    ax.set_ylim(0.0, float(total.max()) * 1.6)
+    ax.yaxis.set_major_formatter(lambda value, _pos: f"{value:.0%}")
+    ax.set_ylabel("share of all queries")
+    success = [row["final_success_rate"] for row in rows]
+    ax.set_title(
+        f"Failing queries only — the other {min(success):.0%}–{max(success):.0%} succeed "
+        "and are not drawn",
+        pad=10,
+    )
+    ax.legend(loc="upper right")
+    ax.grid(axis="y")
+    ax.set_axisbelow(True)
+    _save_figure(fig, save_path, metadata)
 
 
 def plot_reranking_transitions(
     rows: list[dict[str, Any]], save_path: str | Path, metadata: dict[str, Any]
 ) -> None:
-    """Grouped counts for the five reranking transition labels."""
+    """Counts for the four transition labels that describe an outcome change.
+
+    `already_successful` is excluded from the bars and reported in the subtitle instead: at
+    ~135 of 162 queries it is an order of magnitude larger than every other category and
+    flattens them into a single readable row of stubs.
+    """
     import numpy as np
 
     plt = _pyplot()
     categories = [
-        "already_successful",
         "rescued_by_reranker",
         "degraded_by_reranker",
         "unchanged_failure",
         "no_opportunity",
     ]
-    labels = ["already successful", "rescued", "degraded", "unchanged failure", "no opportunity"]
-    pipelines = [row["pipeline"] for row in rows]
+    labels = [
+        "rescued\ninto top 10",
+        "degraded\nout of top 10",
+        "unchanged failure\nnever ranked",
+        "no opportunity\nnot in top 50",
+    ]
     positions = np.arange(len(categories))
-    width = 0.24
-    fig, ax = plt.subplots(figsize=(8.0, 4.8))
+    width = 0.26
+    fig, ax = plt.subplots(figsize=(_FIGURE_WIDTH, 4.0))
     for offset, row in enumerate(rows):
-        ax.bar(
+        bars = ax.bar(
             positions + (offset - 1) * width,
             [row["counts"][category] for category in categories],
             width,
             label=row["pipeline"],
+            color=PIPELINE_COLORS.get(row["pipeline"]),
         )
-    ax.set_xticks(positions, labels, rotation=18, ha="right")
+        ax.bar_label(bars, padding=2, fontsize=8, color="0.25")
+
+    already = " / ".join(str(row["counts"]["already_successful"]) for row in rows)
+    total = sum(rows[0]["counts"].values())
+    ax.set_xticks(positions, labels, fontsize=8.5)
     ax.set_ylabel("query count")
-    ax.set_title("Reranking transitions (calibration-dev)")
-    ax.legend(fontsize="small")
-    ax.grid(axis="y", alpha=0.2)
+    ax.set_ylim(0, max(row["counts"][c] for row in rows for c in categories) * 1.3)
+    ax.set_title(
+        f"What reranking changed, of {total} queries\n"
+        f"already successful before and after, not shown: {already}",
+        pad=10,
+    )
+    ax.legend(loc="upper left", ncol=3)
+    ax.grid(axis="y")
+    ax.set_axisbelow(True)
     _save_figure(fig, save_path, metadata)
 
 
@@ -204,63 +285,68 @@ def _wilson_interval(successes: int, n: int, z: float = 1.96) -> tuple[float, fl
 def plot_reliability(
     predictions: list[dict[str, Any]], save_path: str | Path, metadata: dict[str, Any]
 ) -> None:
-    """Reliability diagram for the train-fitted Platt and primary common-feature models.
+    """Reliability diagram, one panel per model, for the train-fitted Platt baseline and the
+    primary common-feature calibrator.
 
-    Bins are equal-width (`reliability_bins`, unchanged), but at this sample size (162
-    calibration-dev queries) several low-probability bins hold only 2-5 queries — connecting
-    those with a plain line makes ordinary small-sample noise look like a real miscalibration
-    pattern. Each point instead gets a 95% Wilson interval and a marker sized by its query
-    count, so a 2-query swing reads as uncertain and a 76-query point reads as a real signal."""
+    One panel each rather than both models overlaid: at 162 dev queries several low-probability
+    bins hold 2-5 queries, and two overlapping series of wide error bars are unreadable. Points
+    are deliberately not connected — a line through a 2-query bin turns sampling noise into an
+    apparent miscalibration trend. Marker area is proportional to bin count, so a small marker
+    with a tall interval reads as "not enough data here" rather than as a finding.
+    """
     plt = _pyplot()
-    fig, ax = plt.subplots(figsize=(7.0, 5.5))
-    ax.plot([0, 1], [0, 1], linestyle="--", color="0.55", label="perfect reliability", zorder=1)
+    panels = (
+        ("raw_score_platt", "raw score, Platt-scaled (baseline)", "o"),
+        ("calibrated", "common-feature calibrator", "s"),
+    )
+    fig, axes = plt.subplots(1, 2, figsize=(_FIGURE_WIDTH, 3.4), sharey=True)
 
-    for model, label, color, marker in (
-        ("raw_score_platt", "train-fitted Platt baseline", "tab:blue", "o"),
-        ("calibrated", "common-feature calibrator", "tab:orange", "s"),
-    ):
+    for ax, (model, label, marker) in zip(axes, panels):
+        color = MODEL_COLORS[model]
         points = reliability_bins(predictions, model, n_bins=10)
         xs = [point["mean_confidence"] for point in points]
         ys = [point["observed_success"] for point in points]
         counts = [point["count"] for point in points]
-        intervals = [_wilson_interval(round(point["observed_success"] * point["count"]), point["count"]) for point in points]
-        lower_err = [y - lo for y, (lo, _hi) in zip(ys, intervals)]
-        upper_err = [hi - y for y, (_lo, hi) in zip(ys, intervals)]
+        intervals = [
+            _wilson_interval(round(point["observed_success"] * point["count"]), point["count"])
+            for point in points
+        ]
 
+        ax.plot([0, 1], [0, 1], linestyle="--", color="0.6", linewidth=1.0, zorder=1)
         ax.errorbar(
             xs,
             ys,
-            yerr=[lower_err, upper_err],
+            yerr=[[y - lo for y, (lo, _hi) in zip(ys, intervals)],
+                  [hi - y for y, (_lo, hi) in zip(ys, intervals)]],
             fmt="none",
             ecolor=color,
             elinewidth=1.0,
-            capsize=3,
-            alpha=0.5,
+            capsize=2.5,
+            alpha=0.45,
             zorder=2,
         )
-        ax.plot(xs, ys, linestyle=":", color=color, alpha=0.4, linewidth=1.0, zorder=2)
-        ax.scatter(
-            xs,
-            ys,
-            s=[18 + 6 * count for count in counts],
-            facecolor=color,
-            edgecolor="white",
-            linewidth=0.6,
-            marker=marker,
-            label=f"{label} (marker size ∝ bin n)",
-            zorder=3,
-        )
-    ax.set_xlim(0.0, 1.0)
-    ax.set_ylim(0.0, 1.0)
-    ax.set_xlabel("mean predicted probability")
-    ax.set_ylabel("observed final top-10 success rate")
-    ax.set_title(
-        "Hybrid reliability (10 fixed bins; error bars = 95% Wilson interval)",
-        fontsize=11,
+        ax.scatter(xs, ys, s=[14 + 4 * count for count in counts], facecolor=color,
+                   edgecolor="white", linewidth=0.6, marker=marker, zorder=3)
+        ax.set_xlim(0.0, 1.0)
+        ax.set_ylim(0.0, 1.02)
+        ax.set_xlabel("mean predicted probability")
+        ax.set_title(label, fontsize=9.5)
+        ax.grid(alpha=0.25)
+        ax.set_axisbelow(True)
+
+    axes[0].set_ylabel("observed top-10 success rate")
+    fig.suptitle("Hybrid reliability: predicted vs. observed top-10 success", y=0.98)
+    fig.text(
+        0.5,
+        0.015,
+        "10 fixed bins · marker area ∝ queries in bin · bars = 95% Wilson interval · "
+        "dashed = perfect calibration",
+        ha="center",
+        fontsize=7.5,
+        color="0.4",
     )
-    ax.legend(fontsize="small", loc="lower right")
-    ax.grid(alpha=0.2)
-    _save_figure(fig, save_path, metadata)
+    fig.tight_layout(rect=(0.0, 0.05, 1.0, 0.94))
+    _save_figure(fig, save_path, metadata, already_tight=True)
 
 
 def plot_hybrid_risk_coverage(
@@ -268,24 +354,54 @@ def plot_hybrid_risk_coverage(
     save_path: str | Path,
     metadata: dict[str, Any],
 ) -> None:
-    """Hybrid raw-score ordering versus the primary common-feature confidence model."""
+    """Hybrid raw-score ordering versus the primary common-feature confidence model.
+
+    A lower curve means the confidence score is better at pushing the queries that will fail to
+    the end of the ranking, so abstaining on them costs less.
+    """
     plt = _pyplot()
-    fig, ax = plt.subplots(figsize=(6.5, 4.5))
+    fig, ax = plt.subplots(figsize=(_FIGURE_WIDTH, 3.8))
+
+    # Below ~30% coverage each point is an average over fewer than 50 queries and a single
+    # failure moves the curve by two percentage points; shaded so the staircase there is not
+    # read as a difference between the models.
+    low_sample = 0.3
+    ax.axvspan(0.0, low_sample, color="0.93", zorder=0)
+
     for model, label in (
         ("raw_score", "raw reranker score"),
         ("calibrated", "common-feature calibrator"),
     ):
         curve = curves[model]
-        ax.plot(
-            [point["coverage"] for point in curve],
-            [point["risk"] for point in curve],
-            label=label,
-        )
+        coverages = [point["coverage"] for point in curve]
+        risks = [point["risk"] for point in curve]
+        ax.plot(coverages, risks, label=label, color=MODEL_COLORS[model], linewidth=1.4, zorder=2)
+        # The two reported operating points, so the figure and the selective-coverage table
+        # can be read against each other.
+        for level in (0.8, 0.6):
+            index = min(range(len(coverages)), key=lambda i: abs(coverages[i] - level))
+            ax.plot(coverages[index], risks[index], marker="o", markersize=4.5,
+                    color=MODEL_COLORS[model], zorder=3)
+
+    top = ax.get_ylim()[1]
+    for level in (0.6, 0.8):
+        ax.axvline(level, color="0.75", linewidth=0.8, linestyle=":", zorder=1)
+        ax.text(level, top * 0.99, f"{level:.0%} coverage" if level == 0.8 else f"{level:.0%}",
+                ha="center", va="top", fontsize=7.5, color="0.45")
+
     ax.set_xlim(0.0, 1.0)
     ax.set_ylim(bottom=0.0)
-    ax.set_xlabel("coverage")
-    ax.set_ylabel("risk (1 - selective success rate)")
-    ax.set_title("Hybrid risk-coverage (calibration-dev)")
-    ax.legend(fontsize="small")
-    ax.grid(alpha=0.2)
+    ax.xaxis.set_major_formatter(lambda value, _pos: f"{value:.0%}")
+    ax.yaxis.set_major_formatter(lambda value, _pos: f"{value:.0%}")
+    ax.set_xlabel("coverage — share of queries answered rather than abstained on")
+    ax.set_ylabel("risk — failures among\nqueries answered")
+    ax.set_title(
+        "Hybrid risk-coverage: what abstention buys (calibration-dev)\n"
+        "shaded: below 30% coverage too few queries remain for the rate to mean much",
+        fontsize=10,
+        pad=12,
+    )
+    ax.legend(loc="upper left")
+    ax.grid(alpha=0.25)
+    ax.set_axisbelow(True)
     _save_figure(fig, save_path, metadata)
