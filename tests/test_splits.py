@@ -1,6 +1,6 @@
 """Offline split-policy tests: no dataset download required.
 
-These guard the plan §5 split policy structurally — determinism from seed 42, 80/20
+These guard the split policy structurally — determinism from seed 42, 80/20
 proportions, disjointness of the committed files, and the rule that no code path can
 address `beir/scifact/test`. The dataset-dependent versions live in `tests/test_data.py`.
 """
@@ -67,7 +67,7 @@ def test_validate_calibration_splits_rejects_incomplete_coverage():
 
 @pytest.mark.parametrize("split_arg", ["test", "beir/scifact/test", "train", "calibration_dev"])
 def test_resolve_split_refuses_anything_but_the_two_calibration_splits(split_arg):
-    # plan §5: the test split stays unreachable until retrieval, configs, features, and
+    # The test split stays unreachable until retrieval, configs, features, and
     # model-selection rules are locked, and opening it is a logged one-time event.
     train_data = {"corpus": {}, "queries": {"q1": "a"}, "qrels": {"q1": {"d1": 1}}}
     with pytest.raises(ValueError, match="Unknown split"):

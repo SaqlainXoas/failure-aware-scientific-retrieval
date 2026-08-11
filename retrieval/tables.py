@@ -1,7 +1,7 @@
 """Builds the result tables from saved run outputs on calibration-dev.
 
 Every number here is read out of a run directory's saved JSON — nothing is recomputed or
-typed by hand (plan §17 Phase 5). Each table carries a provenance block naming the run
+typed by hand. Each table carries a provenance block naming the run
 directory, git commit, and model revisions it came from, because `runs/` is not tracked.
 """
 
@@ -105,7 +105,7 @@ def build_comparison_table(artifacts: dict[str, dict[str, Any]]) -> list[dict[st
 
 
 def build_decomposition_table(artifacts: dict[str, dict[str, Any]]) -> list[dict[str, Any]]:
-    """One row per pipeline, columns = the plan §10.2 decomposition rates.
+    """One row per pipeline, columns = the failure-decomposition rates.
 
     All rates are denominated over every query in the split except the two conditional ones:
     `conditional_conversion_rate` (denominator: queries with a top-50 opportunity) and
@@ -122,8 +122,7 @@ def build_decomposition_table(artifacts: dict[str, dict[str, Any]]) -> list[dict
 
 
 def build_rerank_delta_table(artifacts: dict[str, dict[str, Any]]) -> list[dict[str, Any]]:
-    """Before/after reranking metrics with the delta (plan §17 Phase 3: "reranking deltas are
-    generated automatically"; plan §21 core table 3). Recall@50 is omitted because the reranked
+    """Before/after reranking metrics with the delta. Recall@50 is omitted because the reranked
     list is exactly the top-50 candidate set, so it cannot change by construction."""
     rows = []
     for pipeline in PIPELINES:
@@ -168,10 +167,10 @@ def load_confidence_artifacts(
 
 
 def build_confidence_table(artifacts: dict[str, dict[str, Any]]) -> list[dict[str, Any]]:
-    """Plan §21 table 5: raw score vs. calibrator, one row per (pipeline, confidence model).
+    """Raw score vs. calibrator, one row per (pipeline, confidence model).
 
-    `brier` is null for the raw score by design — plan §9 forbids treating it as a probability,
-    so the Platt-scaled row is the like-for-like Brier comparison."""
+    `brier` is null for the raw score by design — it is not a probability, so the Platt-scaled
+    row is the like-for-like Brier comparison."""
     rows = []
     for pipeline in PIPELINES:
         if pipeline not in artifacts:
@@ -194,8 +193,8 @@ def build_confidence_table(artifacts: dict[str, dict[str, Any]]) -> list[dict[st
 
 
 def build_selective_table(artifacts: dict[str, dict[str, Any]]) -> list[dict[str, Any]]:
-    """Plan §21 table 6: selective success rate at the three fixed coverage levels §10.3 names
-    up front (100%, 80%, 60%) — reported for every model so no favourable point can be cherry-picked."""
+    """Selective success rate at the three coverage levels fixed up front (100%, 80%, 60%) —
+    reported for every model so no favourable point can be cherry-picked."""
     rows = []
     for pipeline in PIPELINES:
         if pipeline not in artifacts:
@@ -258,7 +257,7 @@ def write_run_manifests(
 ) -> list[Path]:
     """Copies the manifest of every run backing a committed table into `results/manifests/`.
 
-    `runs/` is regenerable and untracked (plan §14), so without this the committed numbers would
+    `runs/` is regenerable and untracked, so without this the committed numbers would
     have no version-controlled link to a git commit, model revision, or package set."""
     manifests_dir = Path(manifests_dir)
     manifests_dir.mkdir(parents=True, exist_ok=True)

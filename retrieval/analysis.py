@@ -159,7 +159,7 @@ def build_bootstrap_artifact(
     runs_dir: str | Path = RUNS_DIR,
     splits_dir: str | Path = SPLITS_DIR,
 ) -> dict[str, Any]:
-    """Builds the eleven plan §10.4 paired comparisons from saved calibration-dev rows."""
+    """Builds the eleven predeclared paired comparisons from saved calibration-dev rows."""
     dev_runs, confidence_run = _phase5_source_runs(runs_dir)
     query_rows = {
         pipeline: _rows_by_query_id(_load_parquet(run_dir / "query_results.parquet"))

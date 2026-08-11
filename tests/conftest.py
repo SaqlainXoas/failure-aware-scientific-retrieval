@@ -1,7 +1,7 @@
 """Shared fixtures.
 
 Integration tests need the real SciFact dataset. They run as part of the default
-`uv run pytest` — plan §16 lists the split/leakage checks as required unit tests, so
+`uv run pytest` — the split/leakage checks are the strongest guard in the suite, so
 excluding them from the documented command would leave the strongest leakage guard
 unexercised. When the dataset genuinely cannot be reached they skip with a clear
 message rather than failing an otherwise-valid checkout.

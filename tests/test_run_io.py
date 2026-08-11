@@ -1,4 +1,4 @@
-"""Run I/O: manifest contents, run-directory schema, and table generation (plan §16)."""
+"""Run I/O: manifest contents, run-directory schema, and table generation."""
 
 import json
 
@@ -30,7 +30,7 @@ BM25_PARAMS = {
     "preprocessing_version": "v1",
 }
 
-# The plan §14 manifest contract, checked field by field rather than "a manifest exists".
+# The manifest contract, checked field by field rather than "a manifest exists".
 REQUIRED_MANIFEST_KEYS = {
     "git_commit",
     "git_dirty",
@@ -103,7 +103,7 @@ def test_manifest_records_concrete_bm25_params_not_a_placeholder():
         _config("bm25"), "c.yaml", "calibration-dev", "cpu", 1, {}, retrieval_params={"bm25": BM25_PARAMS}
     )
 
-    # plan §6.1 requires the values actually used, not the string "library default".
+    # The manifest must record the values actually used, not the string "library default".
     assert manifest["bm25_params"]["k1"] == 1.5
     assert manifest["bm25_params"]["b"] == 0.75
     assert manifest["bm25_params"]["tokenizer"]["stopwords"] == "english"
@@ -113,7 +113,7 @@ def test_manifest_keeps_primary_and_exploratory_feature_sets_separate():
     hybrid = build_manifest(_config("hybrid_rrf"), "c.yaml", "calibration-dev", "cpu", 1, {})
     bm25 = build_manifest(_config("bm25"), "c.yaml", "calibration-dev", "cpu", 1, {})
 
-    # plan §7: the overlap feature is an addition, never a replacement.
+    # The overlap feature is an addition to the common set, never a replacement.
     assert "hybrid_bm25_dense_top10_overlap" not in hybrid["confidence_primary_feature_names"]
     assert "hybrid_bm25_dense_top10_overlap" in hybrid["confidence_exploratory_feature_names"]
     assert bm25["confidence_exploratory_feature_names"] is None

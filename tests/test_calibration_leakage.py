@@ -1,4 +1,4 @@
-"""Leakage rules for the confidence stage (plan §5, §9; Phase 4 spec AC 2-4).
+"""Leakage rules for the confidence stage.
 
 `fit_calibrator` being train-only is necessary but not sufficient — the rule that matters lives
 in `run_calibration`'s wiring, which decides which split is fitted and which is only scored.
@@ -130,7 +130,7 @@ def test_raw_score_is_not_reported_as_a_probability(fit_spy):
     raw = calibration["results"]["raw_score"]["confidence_metrics"]
     platt = calibration["results"]["raw_score_platt"]["confidence_metrics"]
 
-    # plan §9: the raw reranker score is not a probability, so it gets no Brier score; the
+    # The raw reranker score is not a probability, so it gets no Brier score; the
     # train-fitted Platt version does. Platt scaling is monotone in the direction the training
     # data implies, so when higher scores really do mean success (as here and on real data) the
     # rank metrics are identical and only the Brier-scale interpretation changes.

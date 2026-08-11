@@ -172,7 +172,7 @@ def run_pipeline(
 
 def per_query_metrics(rows: list[dict], qrels: dict[str, dict[str, int]]) -> dict[str, dict[str, float]]:
     """Ranking metrics per query — averaged into metrics.json and kept per-query in
-    query_results.parquet so the plan §10.4 bootstrap can resample at query level."""
+    query_results.parquet so the paired bootstrap can resample at query level."""
     ranked_by_query: dict[str, list[dict]] = {}
     for row in rows:
         ranked_by_query.setdefault(row["query_id"], []).append(row)
@@ -258,7 +258,7 @@ def compute_query_labels(
 
 
 def confidence_feature_names(pipeline: str) -> list[str]:
-    """The plan §9 common feature set — the primary model for every pipeline, hybrid included."""
+    """The common feature set — the primary model for every pipeline, hybrid included."""
     del pipeline  # kept in the signature: the feature set is a per-pipeline question by design
     return COMMON_FEATURES
 
@@ -266,9 +266,9 @@ def confidence_feature_names(pipeline: str) -> list[str]:
 def exploratory_feature_names(pipeline: str) -> list[str] | None:
     """Common features plus the hybrid-only BM25/dense overlap, for hybrid_rrf only.
 
-    Plan §7 allows this as one clearly labelled exploratory ablation but forbids it replacing
-    the common-feature comparison, so it is fitted and reported *in addition to* the primary
-    model, never instead of it."""
+    This is one clearly labelled exploratory ablation, not a replacement for the common-feature
+    comparison: it is fitted and reported *in addition to* the primary model, never instead
+    of it."""
     return COMMON_FEATURES + HYBRID_FEATURES if pipeline == "hybrid_rrf" else None
 
 
@@ -309,9 +309,9 @@ def run_calibration(
     on calibration-dev, never on train.
 
     Four models are reported side by side and never conflated: the raw top-1 reranker score
-    (ranking metrics only — plan §9 forbids treating it as a probability), the same score after
-    train-fitted Platt scaling (which gives the baseline a comparable Brier), the common-feature
-    calibrator (primary, plan §9), and for hybrid the common+overlap ablation (exploratory, §7).
+    (ranking metrics only — it is not a probability), the same score after train-fitted Platt
+    scaling (which gives the baseline a comparable Brier), the common-feature calibrator
+    (primary), and for hybrid the common+overlap ablation (exploratory).
     """
     pipeline = config["pipeline"]
     class_weight = config.get("confidence_class_weight")
@@ -473,8 +473,8 @@ def build_manifest(
         manifest["query_instruction"] = QUERY_INSTRUCTION
         manifest["similarity"] = "cosine (normalized embeddings, exact matmul)"
     if pipeline in ("bm25", "hybrid_rrf"):
-        # Concrete values read off the fitted index, not the string "library default":
-        # plan §6.1 requires the manifest to record what was actually used.
+        # Concrete values read off the fitted index, not the string "library default", so the
+        # manifest records what was actually used even if a bm25s release changes its defaults.
         manifest["bm25_params"] = retrieval_params.get("bm25")
     if pipeline == "hybrid_rrf":
         manifest["rrf_k"] = config.get("rrf_k", 60)
@@ -506,8 +506,7 @@ def build_query_results(
     features_by_query: dict[str, dict[str, float]],
 ) -> list[dict]:
     """One row per query joining first-stage metrics, reranked metrics, failure/transition
-    labels, and confidence features — the query-level table plan §14 requires and the unit
-    of resampling for the plan §10.4 paired bootstrap."""
+    labels, and confidence features — the unit of resampling for the paired bootstrap."""
     rows = []
     for label in labels:
         query_id = label["query_id"]
@@ -621,8 +620,8 @@ def _write_cv_artifacts(run_dir: Path, calibration: dict, cross_validated: dict)
 
 
 def _capture_logs() -> io.StringIO:
-    """Tees root logging into a buffer so the run's logs.txt (plan §14) can be written into the
-    run directory, which does not exist yet when the run starts."""
+    """Tees root logging into a buffer so logs.txt can be written into the run directory,
+    which does not exist yet when the run starts."""
     buffer = io.StringIO()
     handler = logging.StreamHandler(buffer)
     handler.setFormatter(logging.Formatter("%(asctime)s %(levelname)s %(name)s: %(message)s"))
@@ -662,7 +661,8 @@ def main(argv: list[str] | None = None) -> None:
     calibration = None
     if args.split == FIT_SPLIT:
         # Confidence models are fitted here and *only* here: this branch reads calibration-train
-        # for fitting and calibration-dev for every threshold and metric (plan §9 leakage rules).
+        # for fitting and calibration-dev for every threshold and metric. Nothing is ever fitted
+        # on the split it is scored on.
         dev_data = resolve_split(EVAL_SPLIT, train_data, splits_dir=config.get("splits_dir", "splits"))
         dev_rows, dev_cache_hits, dev_raw_rows, _ = run_pipeline(config, dev_data, device, args.force)
         dev_reranked_rows, dev_rerank_cache_hits = run_reranking(config, dev_data, dev_rows, device, args.force)

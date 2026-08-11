@@ -17,8 +17,8 @@ PREPROCESSING_VERSION = "v1"
 QUERY_INSTRUCTION = "Represent this sentence for searching relevant passages: "
 
 # Pinned explicitly rather than left to bm25s' defaults so the manifest can record them and
-# a future bm25s release cannot silently change tokenization (plan §6.1: tokenization must be
-# documented and identical across all BM25 runs). These values *are* bm25s 0.3.x's defaults,
+# a future bm25s release cannot silently change tokenization, which must stay identical across
+# every BM25 run for the comparison to hold. These values *are* bm25s 0.3.x's defaults,
 # so pinning them does not change any existing result or invalidate the cache.
 BM25_TOKENIZER = {
     "lower": True,
@@ -55,8 +55,8 @@ def bm25_retrieve(
     """BM25 (bm25s, library-default k1/b) over title+abstract corpus text; deterministic tokenization.
 
     `params_out`, when given, is filled with the scoring and tokenization parameters actually
-    used, so the caller can record concrete values in the run manifest (plan §6.1) instead of
-    an unresolvable "library default".
+    used, so the caller can record concrete values in the run manifest instead of an
+    unresolvable "library default".
     """
     import bm25s
 

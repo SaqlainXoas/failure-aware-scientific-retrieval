@@ -1,7 +1,7 @@
 """Integration tests against the real SciFact dataset via ir_datasets.
 
-These run as part of the default `uv run pytest` (plan §16 requires the split and
-leakage checks); they skip, rather than fail, when the dataset is unreachable — see
+These run as part of the default `uv run pytest` because the split and leakage checks
+matter; they skip, rather than fail, when the dataset is unreachable — see
 `tests/conftest.py`. The offline structural split checks live in `tests/test_splits.py`.
 """
 

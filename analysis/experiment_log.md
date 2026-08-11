@@ -1,5 +1,13 @@
 # Experiment Log
 
+Dated record of every methodological decision, written as it was made. Entries are kept verbatim,
+including ones that record a result coming out worse than hoped.
+
+`plan §N` in these entries cites the pre-registration document that fixed the dataset, splits,
+models, failure taxonomy, leakage rules, and statistical tests before any result existed. That
+document is not published; the README states the constraints it imposed, and this log is the
+dated evidence they were followed.
+
 ## 2026-08-05 — Calibration split generation
 
 - Decision: generated `splits/calibration_train.txt` and `splits/calibration_dev.txt` by taking only `beir/scifact/train` query IDs with at least one positive (`grade > 0`) qrel, sorting them, then `random.Random(seed=42).shuffle`, taking the first 20% (rounded) as dev.

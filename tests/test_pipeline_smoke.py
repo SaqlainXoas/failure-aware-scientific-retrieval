@@ -1,8 +1,8 @@
-"""Integration smoke test required by plan §16: a tiny synthetic corpus run end to end through
+"""Integration smoke test: a tiny synthetic corpus run end to end through
 retrieve -> rerank -> evaluate -> extract features -> calibrate.
 
-The cross-encoder is mocked (plan §16: "Mock model scores rather than testing external model
-quality"); BM25 is real because it is cheap and its tokenization is part of what we want
+The cross-encoder is mocked — this tests our wiring, not external model
+quality; BM25 is real because it is cheap and its tokenization is part of what we want
 exercised. This covers the wiring in run.py, which is where the split and leakage rules actually
 live — the unit tests only cover the pieces in isolation.
 """
@@ -151,7 +151,7 @@ def test_end_to_end_hybrid_reports_primary_and_exploratory_models(mocked_cross_e
         dev_reranked,
     )
 
-    # plan §7: the exploratory overlap model is reported *alongside* the common-feature model.
+    # The exploratory overlap model is reported *alongside* the common-feature model.
     assert calibration["primary_model"] == "calibrated"
     assert set(calibration["results"]) == {
         "raw_score",
@@ -169,7 +169,7 @@ def test_end_to_end_hybrid_reports_primary_and_exploratory_models(mocked_cross_e
         assert len(result["risk_coverage"]) == len(dev_labels)
         assert set(result["selective_results"]) == {"1.0", "0.8", "0.6"}
 
-    # per-query predictions are persisted for the plan §10.4 paired bootstrap
+    # per-query predictions are persisted so the paired bootstrap can resample them
     assert [p["query_id"] for p in calibration["predictions"]] == sorted(dev_labels)
     for prediction in calibration["predictions"]:
         assert set(prediction) == {

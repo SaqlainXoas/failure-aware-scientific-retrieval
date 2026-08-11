@@ -119,7 +119,7 @@ def test_decomposition_metrics_zero_opportunity_edge_case():
 
 
 def test_decomposition_counts_sum_to_query_count():
-    # Phase 3 spec AC 3: transition labels must partition the query set, and the saved
+    # Transition labels must partition the query set, and the saved
     # artifact has to make that checkable rather than only exposing rates.
     labels = (
         ["already_successful"] * 7
@@ -139,7 +139,7 @@ def test_decomposition_counts_sum_to_query_count():
 
 
 def test_share_of_failures_from_candidate_set():
-    # The plan §23 headline quantity: of everything that failed, how much the reranker
+    # The headline quantity of the study: of everything that failed, how much the reranker
     # never had a chance to fix. 5 no_opportunity out of 5 + 1 + 2 = 8 total failures.
     labels = (
         ["no_opportunity"] * 5

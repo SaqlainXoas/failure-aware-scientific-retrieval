@@ -83,8 +83,8 @@ _SPLIT_FILES = {
 def resolve_split(split_arg: str, train_data: dict[str, Any], splits_dir: str | Path = SPLITS_DIR) -> dict[str, Any]:
     """Filters the full train split's queries/qrels down to one calibration split's query IDs.
 
-    The test split stays untouched until later phases (plan §5 leakage rules), so only
-    calibration-dev/calibration-train are recognized here.
+    The test split stays untouched, so only calibration-dev/calibration-train are
+    recognized here — there is no code path that can reach it.
     """
     if split_arg not in _SPLIT_FILES:
         raise ValueError(

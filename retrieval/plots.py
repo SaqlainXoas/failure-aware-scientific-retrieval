@@ -42,7 +42,7 @@ def _save_figure(
 
 def plot_risk_coverage(curves: dict[str, list[dict[str, float]]], save_path: str | Path) -> None:
     """One risk-coverage line per confidence model, plotted together so the raw baseline, its
-    Platt-scaled form, and the calibrator are compared but never conflated (plan §9)."""
+    Platt-scaled form, and the calibrator are compared but never conflated."""
     plt = _pyplot()
 
     fig, ax = plt.subplots(figsize=(6.5, 4.5))
@@ -120,7 +120,7 @@ def plot_failure_breakdown(
 def plot_reranking_transitions(
     rows: list[dict[str, Any]], save_path: str | Path, metadata: dict[str, Any]
 ) -> None:
-    """Grouped counts for the five exact plan §8 reranking transition labels."""
+    """Grouped counts for the five reranking transition labels."""
     import numpy as np
 
     plt = _pyplot()

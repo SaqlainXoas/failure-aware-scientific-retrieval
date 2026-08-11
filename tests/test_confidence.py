@@ -222,7 +222,7 @@ def test_confidence_metrics_single_class_returns_none_not_error():
 
 
 def test_confidence_metrics_refuses_brier_for_non_probability_scores():
-    # plan §9: the raw reranker score is not a probability, so Brier is withheld rather than
+    # The raw reranker score is not a probability, so Brier is withheld rather than
     # computed on a rescaled stand-in. AUROC/AUPRC are rank-based and stay available.
     scores = {"q1": 7.2, "q2": -3.1, "q3": 0.4}
     labels = {"q1": True, "q2": False, "q3": True}

@@ -65,12 +65,12 @@ CATEGORIES = [
 
 
 def candidate_success_50(gold_doc_ids: set[str], candidate_doc_ids: list[str]) -> bool:
-    """True iff gold(q) intersects C50(q) — plan.md §8 candidate_success_50."""
+    """True iff gold(q) intersects the top-50 candidate set."""
     return bool(gold_doc_ids & set(candidate_doc_ids))
 
 
 def final_success_10(gold_doc_ids: set[str], ranked_doc_ids: list[str]) -> bool:
-    """True iff gold(q) intersects the given top-10 ranking — plan.md §8 final_success_10."""
+    """True iff gold(q) intersects the given top-10 ranking."""
     return bool(gold_doc_ids & set(ranked_doc_ids))
 
 
@@ -80,11 +80,10 @@ def label_transition(
     reranked_ranked: list[str],
     candidate_depth: int = 50,
 ) -> str:
-    """Assigns one of the plan.md §8 transition categories.
+    """Assigns one of the five transition categories.
 
     The no-candidate check is the first and only exit for candidate_success_50=0, so a
-    candidate-set failure can never be mislabeled as a reranker rescue (plan.md §8 / spec
-    acceptance criterion 4).
+    candidate-set failure can never be mislabeled as a reranker rescue.
     """
     if not candidate_success_50(gold_doc_ids, first_stage_ranked[:candidate_depth]):
         return "no_opportunity"
@@ -100,15 +99,15 @@ def label_transition(
 
 
 def decomposition_metrics(labels: list[str]) -> dict[str, Any]:
-    """Aggregates plan.md §10.2 failure-decomposition rates from per-query transition labels.
+    """Aggregates failure-decomposition rates from per-query transition labels.
 
     Every rate except the two below is denominated over *all* queries in the split:
     candidate_set_failure_rate / reranking_failure_rate / final_success_rate partition them
     exactly. The two conditional rates are named for their denominator —
     conditional_conversion_rate is final success among queries with a candidate-set opportunity,
     and share_of_failures_from_candidate_set is the fraction of *final failures* that the
-    reranker never had a chance to fix (the plan §23 headline quantity). Both return 0.0 rather
-    than raising when their denominator is empty.
+    reranker never had a chance to fix — the headline quantity of the study. Both return 0.0
+    rather than raising when their denominator is empty.
 
     Raw per-category counts and n_queries are returned alongside the rates so the
     "transitions sum to the query count" invariant is checkable from the saved artifact.

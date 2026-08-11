@@ -1,6 +1,6 @@
 """Confidence feature extraction, raw-score baseline, and logistic calibration.
 
-Predicts `final_success_10` (plan.md §9) from interpretable reranker-score and
+Predicts `final_success_10` from interpretable reranker-score and
 first-stage score/rank features. The scaler and LogisticRegression are always fitted
 together in one sklearn Pipeline on calibration-train only; calibration-dev is used
 only to select display thresholds and report metrics, never to fit anything.
@@ -194,7 +194,7 @@ def _rows_by_query(rows: list[dict]) -> dict[str, list[dict]]:
 
 
 def _reranker_features(reranked_docs: list[dict]) -> dict[str, float]:
-    """Reranker score-shape features from a query's own reranked candidates (plan §9)."""
+    """Reranker score-shape features from a query's own reranked candidates."""
     scores = [row["score"] for row in reranked_docs]
     top1 = scores[0] if scores else 0.0
     top2 = scores[1] if len(scores) >= 2 else top1
@@ -209,13 +209,13 @@ def _reranker_features(reranked_docs: list[dict]) -> dict[str, float]:
 
 def _first_stage_features(first_stage_docs: list[dict], reranked_docs: list[dict]) -> dict[str, float]:
     """First-stage score/rank features, within-query min-max normalized so BM25/cosine/RRF
-    scales never need cross-pipeline comparison (plan §9). A constant candidate set (mx == mn)
+    scales never need cross-pipeline comparison. A constant candidate set (mx == mn)
     normalizes to the uninformative midpoint 0.5 rather than dividing by zero.
 
-    `first_stage_docs` is expected to already be scoped to the reranked candidate set (plan §9
-    says these features are computed "over the candidate set"); `extract_features` truncates to
-    rerank_depth before calling in, so the normalization denominator is the same depth for every
-    pipeline rather than whatever depth each retriever happened to emit."""
+    `first_stage_docs` is expected to already be scoped to the reranked candidate set;
+    `extract_features` truncates to rerank_depth before calling in, so the normalization
+    denominator is the same depth for every pipeline rather than whatever depth each
+    retriever happened to emit."""
     scores = [row["score"] for row in first_stage_docs]
     if scores:
         mn, mx = min(scores), max(scores)
@@ -277,9 +277,9 @@ def _spearman(x: list[float], y: list[float]) -> float:
 def _hybrid_overlap_features(
     bm25_docs: list[dict], dense_docs: list[dict], depth: int = 10
 ) -> dict[str, float]:
-    """Fraction of the two retrievers' top-`depth` lists that agree — the plan §7/§9
-    hybrid-only exploratory feature. Reported as a fraction so it shares the [0,1] range of
-    the other normalized features."""
+    """Fraction of the two retrievers' top-`depth` lists that agree — the hybrid-only
+    exploratory feature. Reported as a fraction so it shares the [0,1] range of the other
+    normalized features."""
     bm25_top = {row["doc_id"] for row in bm25_docs if row["rank"] <= depth}
     dense_top = {row["doc_id"] for row in dense_docs if row["rank"] <= depth}
     return {"hybrid_bm25_dense_top10_overlap": len(bm25_top & dense_top) / depth}
@@ -291,7 +291,7 @@ def extract_features(
     rerank_depth: int = 50,
     raw_rows: dict[str, list[dict]] | None = None,
 ) -> dict[str, dict[str, float]]:
-    """Per-query feature dict keyed by query_id (plan.md §9 common feature set).
+    """Per-query feature dict keyed by query_id, over the common feature set.
 
     First-stage rows are truncated to `rerank_depth` first, so every feature is computed over
     the candidate set the reranker actually saw and the within-query normalization uses the same
@@ -324,7 +324,7 @@ def extract_features(
 
 
 def raw_baseline_scores(reranked_rows: list[dict]) -> dict[str, float]:
-    """Top-1 reranker score per query — the plan §9 raw-score baseline. Not a probability."""
+    """Top-1 reranker score per query — the raw-score baseline. Not a probability."""
     by_query = _rows_by_query(reranked_rows)
     return {query_id: docs[0]["score"] if docs else 0.0 for query_id, docs in by_query.items()}
 
@@ -334,10 +334,10 @@ def fit_raw_score_calibrator(scores: dict[str, float], labels_by_query: dict[str
     on calibration-train, giving the baseline a genuine probability so its Brier score is
     comparable with the feature calibrator's.
 
-    Plan §9 forbids calling the raw score a probability, and §10.3/§10.4 still require Brier for
-    the baseline; fitting the transform on train (never on the split being scored) is what makes
-    those two compatible. AUROC/AUPRC are unchanged by this monotone transform, so the raw
-    ordering is still what the ranking metrics measure."""
+    The raw cross-encoder logit is not a probability, yet the baseline still needs a Brier
+    score; fitting the transform on train (never on the split being scored) is what makes those
+    two compatible. AUROC/AUPRC are unchanged by this monotone transform, so the raw ordering is
+    still what the ranking metrics measure."""
     from sklearn.linear_model import LogisticRegression
     from sklearn.pipeline import Pipeline
     from sklearn.preprocessing import StandardScaler
@@ -375,7 +375,7 @@ def fit_calibrator(
 ):
     """Fits StandardScaler + LogisticRegression together in one Pipeline, on the data
     passed in only. class_weight is documented in analysis/experiment_log.md whenever
-    'balanced' is used (plan §9 requires the imbalance decision to be recorded)."""
+    'balanced' is used, since the class-imbalance decision has to stay on the record."""
     from sklearn.linear_model import LogisticRegression
     from sklearn.pipeline import Pipeline
     from sklearn.preprocessing import StandardScaler
@@ -416,7 +416,7 @@ def cross_validated_predictions(
 ) -> list[dict[str, Any]]:
     """Stratified K-fold out-of-fold predictions over the whole calibration set.
 
-    The predeclared train/dev protocol (plan §9) evaluates the calibrator on 162 dev queries,
+    The predeclared train/dev protocol evaluates the calibrator on 162 dev queries,
     which contain only ~20 failures — too few for the raw-vs-calibrated comparison to be
     decisive either way. Cross-validating over all 809 calibration queries yields an
     out-of-fold prediction for every query (~100 failures), so the same comparison is made at
@@ -486,7 +486,7 @@ def confidence_metrics(
     (both are undefined in that case) rather than raising or silently returning a fake value.
 
     Brier is only defined for calibrated probabilities, so `is_probability=False` (the raw
-    reranker score, which plan §9 forbids treating as a probability) returns None for it rather
+    reranker score, which is not a probability) returns None for it rather
     than rescaling the scores to fake a probability — use `fit_raw_score_calibrator` for a
     baseline Brier. AUROC/AUPRC are rank-based and scale-free, so they are always reported.
 
