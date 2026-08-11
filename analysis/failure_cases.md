@@ -5,8 +5,8 @@ These 12 hybrid-RRF cases were selected by the predefined confidence-ranking rul
 - Split: `calibration-dev`
 - Pipeline: `hybrid_rrf`
 - Confidence model: `calibrated` fitted on `calibration-train`
-- Confidence source: `2026-08-05T114843.983136Z_hybrid_rrf_calibration-train`
-- Ranking source: `2026-08-05T114749.452090Z_hybrid_rrf_calibration-dev`
+- Confidence source: `2026-08-11T071032.700346Z_hybrid_rrf_calibration-train`
+- Ranking source: `2026-08-11T071029.770459Z_hybrid_rrf_calibration-dev`
 
 ## 1. Query `398` — high_confidence_incorrect
 
