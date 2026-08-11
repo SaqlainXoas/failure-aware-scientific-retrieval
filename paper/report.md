@@ -44,6 +44,30 @@ The scope is deliberately narrow. No model is fine-tuned, no dataset is added, a
 is made to build a better retriever. The contribution is a decomposition and an honest
 accounting of it, including two results that came out the wrong way.
 
+## 1.1 Related work
+
+SciFact frames scientific claim verification as selecting abstracts that contain evidence for
+or against a claim, with annotated rationales [1]. This makes it a useful setting for separating
+retrieval failure from downstream ranking failure: an abstract that never enters the candidate
+set cannot be recovered by a reranker. We use SciFact through BEIR, a heterogeneous benchmark
+designed for zero-shot information-retrieval evaluation across datasets and task types [2].
+
+Our first-stage comparison follows the standard lexical-versus-dense retrieval distinction:
+BM25 provides a strong term-matching baseline [3], while BGE supplies a frozen neural
+bi-encoder. The hybrid system uses Reciprocal Rank Fusion, a rank-based combination method that
+does not require the component scores to share a scale [4]. The second stage is a frozen
+cross-encoder reranker, so the experiment tests the practical interaction between candidate
+recall and reranking rather than training a new end-to-end system.
+
+The confidence analysis is related to selective prediction and post-hoc calibration. We compare
+the reranker's score with a train-fitted Platt-scaled baseline and a multivariate logistic model;
+calibration is evaluated separately from ranking quality because a score can order failures well
+while still producing poor probabilities. This distinction follows the calibration literature's
+definition of calibrated confidence as a probability representative of empirical correctness [5].
+The contribution here is not a new calibration method, but an explicit failure taxonomy and an
+evaluation protocol that keeps candidate-set errors, reranking errors, ranking metrics, and
+probability calibration distinct.
+
 # 2. Method
 
 ## 2.1 Data and splits
@@ -398,3 +422,26 @@ figure are at the project repository. All figures and tables are regenerated fro
 artifacts by a single command; no number in this report was typed by hand. Each committed
 result traces to a run directory, a git commit, and a pinned model revision through
 `results/manifests/`.
+
+## References
+
+[1] David Wadden, Shanchuan Lin, Kyle Lo, Lucy Lu Wang, Madeleine van Zuylen, Arman Cohan, and
+Hannaneh Hajishirzi. 2020. *Fact or Fiction: Verifying Scientific Claims*. EMNLP.
+<https://aclanthology.org/2020.emnlp-main.609/>
+
+[2] Nandan Thakur, Nils Reimers, Johannes Daxenberger, and Iryna Gurevych. 2021. *BEIR: A
+Heterogeneous Benchmark for Zero-shot Evaluation of Information Retrieval Models*. NeurIPS
+Datasets and Benchmarks.
+<https://datasets-benchmarks-proceedings.neurips.cc/paper/2021/hash/65b9eea6e1cc6bb9f0cd2a47751a186f-Abstract-round2.html>
+
+[3] Stephen Robertson and Hugo Zaragoza. 2009. *The Probabilistic Relevance Framework: BM25 and
+Beyond*. Foundations and Trends in Information Retrieval, 3(4), 333–389.
+<https://doi.org/10.1561/1500000019>
+
+[4] Gordon V. Cormack, Charles L. A. Clarke, and Stefan Buettcher. 2009. *Reciprocal Rank
+Fusion Outperforms Condorcet and Individual Rank Learning Methods*. SIGIR.
+<https://research.google/pubs/reciprocal-rank-fusion-outperforms-condorcet-and-individual-rank-learning-methods/>
+
+[5] Chuan Guo, Geoff Pleiss, Yu Sun, and Kilian Q. Weinberger. 2017. *On Calibration of Modern
+Neural Networks*. ICML, PMLR 70.
+<https://proceedings.mlr.press/v70/guo17a.html>
