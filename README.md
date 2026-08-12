@@ -120,6 +120,10 @@ the fact.
 The calibrator's curve sits above the diagonal almost everywhere, meaning it systematically
 under-states success. That is what a worse Brier at better AUROC looks like.
 
+The panels hold a different number of points because the baseline never predicts below 0.3, so
+its first three bins are empty, while the calibrator uses the full range. That wider spread is
+why it ranks failures better and why its probabilities overshoot.
+
 ## Held-out evaluation
 
 The 300-query SciFact test split was opened once, after every retriever, feature, model, and

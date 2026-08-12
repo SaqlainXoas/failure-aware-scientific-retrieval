@@ -292,6 +292,12 @@ predicted probabilities down. That setting was fixed in advance from the trainin
 imbalance. It was not revised after the Brier result appeared, and no unweighted variant is
 reported, because selecting it post hoc would convert a predeclared choice into a tuned one.
 
+The two panels hold a different number of points for a substantive reason. The Platt-scaled
+baseline never predicts below 0.3, leaving its first three bins empty, whereas the calibrator
+spans the full unit interval. The same wider spread explains both results at once: more
+separation between queries is what improves the ranking metrics, and pushing predictions toward
+the extremes is what costs it on Brier.
+
 The practical consequence is that the calibrator is usable for *ordering* queries by risk —
 routing, abstention, triage — and not for reporting a probability to a user.
 
