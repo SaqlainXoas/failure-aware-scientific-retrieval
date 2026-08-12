@@ -52,21 +52,34 @@ retrieval failure from downstream ranking failure: an abstract that never enters
 set cannot be recovered by a reranker. We use SciFact through BEIR, a heterogeneous benchmark
 designed for zero-shot information-retrieval evaluation across datasets and task types [2].
 
-Our first-stage comparison follows the standard lexical-versus-dense retrieval distinction:
-BM25 provides a strong term-matching baseline [3], while BGE supplies a frozen neural
-bi-encoder. The hybrid system uses Reciprocal Rank Fusion, a rank-based combination method that
-does not require the component scores to share a scale [4]. The second stage is a frozen
-cross-encoder reranker, so the experiment tests the practical interaction between candidate
-recall and reranking rather than training a new end-to-end system.
+The first-stage comparison follows the standard lexical-versus-dense distinction. BM25 provides
+a strong term-matching baseline [3], here through the `bm25s` implementation [4], while BGE
+supplies a frozen neural bi-encoder trained with the C-Pack recipe [5]. The hybrid system uses
+Reciprocal Rank Fusion, a rank-based combination that does not require the component scores to
+share a scale [6].
 
-The confidence analysis is related to selective prediction and post-hoc calibration. We compare
-the reranker's score with a train-fitted Platt-scaled baseline and a multivariate logistic model;
-calibration is evaluated separately from ranking quality because a score can order failures well
-while still producing poor probabilities. This distinction follows the calibration literature's
-definition of calibrated confidence as a probability representative of empirical correctness [5].
-The contribution here is not a new calibration method, but an explicit failure taxonomy and an
-evaluation protocol that keeps candidate-set errors, reranking errors, ranking metrics, and
-probability calibration distinct.
+The second stage follows the BERT cross-encoder reranking design of Nogueira and Cho [7], using
+a model trained on MS MARCO [8]. BEIR reports that such rerankers give strong zero-shot
+transfer on average while BM25 remains competitive on individual datasets [2]; the results in
+§3.3 and §3.5 are a domain-specific instance of that variance rather than a contradiction of it.
+Because the reranker is frozen, this study measures the interaction between candidate recall and
+reranking rather than training a new end-to-end system.
+
+The confidence model is closest to post-retrieval query performance prediction, which estimates
+how well a system has done on a query from the retrieval output itself, without relevance
+judgments [9]. The formulation here differs in target and use: instead of predicting a graded
+effectiveness score, it predicts the binary event that the pipeline's final top 10 contains
+annotated evidence, which is the quantity an abstention policy actually needs. Reporting it as a
+risk-coverage trade-off places it in the selective-prediction framework, where a model may
+decline to answer in order to lower error on what it does answer [10].
+
+Calibration is evaluated separately from ranking quality because a score can order failures well
+while still producing poor probabilities. The raw cross-encoder logit is not a probability, so
+the Brier baseline is a Platt scaling of it fitted on training data only [11]; calibrated
+confidence is taken in the usual sense of a probability representative of empirical correctness
+[12]. The contribution is not a new calibration method. It is an explicit failure taxonomy and
+an evaluation protocol that keeps candidate-set errors, reranking errors, ranking quality, and
+probability calibration distinct, evaluated once on held-out data.
 
 # 2. Method
 
@@ -210,8 +223,8 @@ calibration-dev Recall@50 — hybrid is the primary pipeline for the confidence 
 
 This is the central result. Moving from BM25 to hybrid cuts candidate-set failures by nearly
 four times, from 11.7% to 3.1% of all queries, yet final success improves by just 3.1 points.
-The reason is visible in the last column: the failures did not disappear so much as change
-category. Three quarters of BM25's failures are queries the reranker could not have fixed;
+The reason is visible in the last column: the failures changed category rather than
+disappearing. Three quarters of BM25's failures are queries the reranker could not have fixed;
 only a quarter of hybrid's are. Reranking failures rise from 3.7% to 9.3% as more borderline
 evidence reaches the reranker and is not ranked.
 
@@ -221,7 +234,7 @@ shifted to the reranker.
 
 ![Transition counts; `already_successful` is omitted, at 132/137/135 of 162.](../results/figures/reranking_transitions.png)
 
-## 3.3 Reranking does not help here
+## 3.3 Effect of reranking
 
 | Pipeline | Recall@10 Δ | nDCG@10 Δ | nDCG@10 95% CI |
 | --- | ---: | ---: | ---: |
@@ -329,9 +342,9 @@ comparison inconclusive, and the reason the cross-validated estimate in §3.4 ex
 data agrees in direction with that estimate without being able to confirm it alone. The Brier
 degradation, by contrast, is significant on every pipeline and on every split tested.
 
-**Threshold transfer.** One question only held-out data can answer: does an abstention threshold
-chosen on calibration-dev still deliver its intended coverage on unseen queries? Carrying the
-hybrid thresholds over unchanged:
+**Threshold transfer.** Held-out data also shows whether an abstention threshold chosen on
+calibration-dev still delivers its intended coverage on unseen queries. Carrying the hybrid
+thresholds over unchanged:
 
 | Target coverage | Raw score kept | Calibrator kept |
 | --- | ---: | ---: |
@@ -429,19 +442,42 @@ result traces to a run directory, a git commit, and a pinned model revision thro
 Hannaneh Hajishirzi. 2020. *Fact or Fiction: Verifying Scientific Claims*. EMNLP.
 <https://aclanthology.org/2020.emnlp-main.609/>
 
-[2] Nandan Thakur, Nils Reimers, Johannes Daxenberger, and Iryna Gurevych. 2021. *BEIR: A
-Heterogeneous Benchmark for Zero-shot Evaluation of Information Retrieval Models*. NeurIPS
-Datasets and Benchmarks.
-<https://datasets-benchmarks-proceedings.neurips.cc/paper/2021/hash/65b9eea6e1cc6bb9f0cd2a47751a186f-Abstract-round2.html>
+[2] Nandan Thakur, Nils Reimers, Andreas Rücklé, Abhishek Srivastava, and Iryna Gurevych. 2021.
+*BEIR: A Heterogenous Benchmark for Zero-shot Evaluation of Information Retrieval Models*.
+NeurIPS Datasets and Benchmarks Track. <https://arxiv.org/abs/2104.08663>
 
 [3] Stephen Robertson and Hugo Zaragoza. 2009. *The Probabilistic Relevance Framework: BM25 and
 Beyond*. Foundations and Trends in Information Retrieval, 3(4), 333–389.
 <https://doi.org/10.1561/1500000019>
 
-[4] Gordon V. Cormack, Charles L. A. Clarke, and Stefan Buettcher. 2009. *Reciprocal Rank
-Fusion Outperforms Condorcet and Individual Rank Learning Methods*. SIGIR.
-<https://research.google/pubs/reciprocal-rank-fusion-outperforms-condorcet-and-individual-rank-learning-methods/>
+[4] Xing Han Lù. 2024. *BM25S: Orders of Magnitude Faster Lexical Search via Eager Sparse
+Scoring*. arXiv:2407.03618. <https://arxiv.org/abs/2407.03618>
 
-[5] Chuan Guo, Geoff Pleiss, Yu Sun, and Kilian Q. Weinberger. 2017. *On Calibration of Modern
-Neural Networks*. ICML, PMLR 70.
-<https://proceedings.mlr.press/v70/guo17a.html>
+[5] Shitao Xiao, Zheng Liu, Peitian Zhang, Niklas Muennighoff, Defu Lian, and Jian-Yun Nie.
+2024. *C-Pack: Packed Resources For General Chinese Embeddings*. SIGIR.
+<https://arxiv.org/abs/2309.07597>
+
+[6] Gordon V. Cormack, Charles L. A. Clarke, and Stefan Buettcher. 2009. *Reciprocal Rank
+Fusion Outperforms Condorcet and Individual Rank Learning Methods*. SIGIR, 758–759.
+<https://dl.acm.org/doi/10.1145/1571941.1572114>
+
+[7] Rodrigo Nogueira and Kyunghyun Cho. 2019. *Passage Re-ranking with BERT*.
+arXiv:1901.04085. <https://arxiv.org/abs/1901.04085>
+
+[8] Payal Bajaj, Daniel Campos, Nick Craswell, Li Deng, Jianfeng Gao, Xiaodong Liu, Rangan
+Majumder, Andrew McNamara, Bhaskar Mitra, Tri Nguyen, Mir Rosenberg, Xia Song, Alina Stoica,
+Saurabh Tiwary, and Tong Wang. 2016. *MS MARCO: A Human Generated MAchine Reading COmprehension
+Dataset*. arXiv:1611.09268. <https://arxiv.org/abs/1611.09268>
+
+[9] David Carmel and Elad Yom-Tov. 2010. *Estimating the Query Difficulty for Information
+Retrieval*. Synthesis Lectures on Information Concepts, Retrieval, and Services, Morgan &
+Claypool. <https://doi.org/10.2200/S00235ED1V01Y201004ICR015>
+
+[10] Yonatan Geifman and Ran El-Yaniv. 2017. *Selective Classification for Deep Neural
+Networks*. NeurIPS, 4878–4887. <https://arxiv.org/abs/1705.08500>
+
+[11] John C. Platt. 1999. *Probabilistic Outputs for Support Vector Machines and Comparisons to
+Regularized Likelihood Methods*. In Advances in Large Margin Classifiers, MIT Press, 61–74.
+
+[12] Chuan Guo, Geoff Pleiss, Yu Sun, and Kilian Q. Weinberger. 2017. *On Calibration of Modern
+Neural Networks*. ICML, PMLR 70, 1321–1330. <https://proceedings.mlr.press/v70/guo17a.html>
