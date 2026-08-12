@@ -321,10 +321,12 @@ def plot_reliability(
             alpha=0.45,
             zorder=2,
         )
-        ax.scatter(xs, ys, s=[14 + 4 * count for count in counts], facecolor=color,
+        # Area stays proportional to bin count, but the constant is small enough that the
+        # largest bin (n=76) does not overflow the axes and collide with its neighbour.
+        ax.scatter(xs, ys, s=[12 + 1.3 * count for count in counts], facecolor=color,
                    edgecolor="white", linewidth=0.6, marker=marker, zorder=3)
-        ax.set_xlim(0.0, 1.0)
-        ax.set_ylim(0.0, 1.02)
+        ax.set_xlim(-0.02, 1.04)
+        ax.set_ylim(-0.03, 1.06)
         ax.set_xlabel("mean predicted probability")
         ax.set_title(label, fontsize=9.5)
         ax.grid(alpha=0.25)
