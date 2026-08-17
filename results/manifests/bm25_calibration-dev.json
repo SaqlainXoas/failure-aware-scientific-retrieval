@@ -1,7 +1,7 @@
 {
-  "git_commit": "58b849b35f849dd9738174d950f621580462c7a5",
+  "git_commit": "ef34a94a62167159f598ffe2eda9b4c39656b78d",
   "git_dirty": false,
-  "timestamp_utc": "2026-08-11T07:10:20Z",
+  "timestamp_utc": "2026-08-17T10:28:00Z",
   "dataset": "beir/scifact",
   "split": "calibration-dev",
   "pipeline": "bm25",

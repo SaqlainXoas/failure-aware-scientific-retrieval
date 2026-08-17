@@ -4,10 +4,10 @@
   "empty_reliability_bins": "omitted; retained points are annotated with sample counts",
   "sources": {
     "bm25": {
-      "run_dir": "2026-08-11T071020.275112Z_bm25_calibration-dev",
+      "run_dir": "2026-08-17T102800.529216Z_bm25_calibration-dev",
       "run_split": "calibration-dev",
       "pipeline": "bm25",
-      "git_commit": "58b849b35f849dd9738174d950f621580462c7a5",
+      "git_commit": "ef34a94a62167159f598ffe2eda9b4c39656b78d",
       "git_dirty": false,
       "dataset": "beir/scifact",
       "model_name": null,
@@ -18,10 +18,10 @@
       "rerank_depth": 50
     },
     "dense_bge": {
-      "run_dir": "2026-08-11T071024.303890Z_dense_bge_calibration-dev",
+      "run_dir": "2026-08-17T102803.456674Z_dense_bge_calibration-dev",
       "run_split": "calibration-dev",
       "pipeline": "dense_bge",
-      "git_commit": "58b849b35f849dd9738174d950f621580462c7a5",
+      "git_commit": "ef34a94a62167159f598ffe2eda9b4c39656b78d",
       "git_dirty": false,
       "dataset": "beir/scifact",
       "model_name": "BAAI/bge-small-en-v1.5",
@@ -32,10 +32,10 @@
       "rerank_depth": 50
     },
     "hybrid_rrf": {
-      "run_dir": "2026-08-11T071029.770459Z_hybrid_rrf_calibration-dev",
+      "run_dir": "2026-08-17T102805.918136Z_hybrid_rrf_calibration-dev",
       "run_split": "calibration-dev",
       "pipeline": "hybrid_rrf",
-      "git_commit": "58b849b35f849dd9738174d950f621580462c7a5",
+      "git_commit": "ef34a94a62167159f598ffe2eda9b4c39656b78d",
       "git_dirty": false,
       "dataset": "beir/scifact",
       "model_name": "BAAI/bge-small-en-v1.5",
