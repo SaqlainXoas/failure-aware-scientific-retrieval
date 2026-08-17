@@ -49,7 +49,7 @@ to be committed and have been removed from this directory. One exception applies
 time: arXiv wants `main.bbl` shipped with the source, so regenerate it with a full `latexmk` run
 before packaging (see [`arxiv-preparation-checklist.md`](arxiv-preparation-checklist.md)).
 
-The committed PDF is 16 pages: 14 pages of main content and 2 pages of references.
+The committed PDF is 17 pages: 15 pages of main content and 2 pages of references.
 
 ## Compile-time switches
 
@@ -77,8 +77,9 @@ Every number in the manuscript was read from a committed artifact, not recompute
 | Table 3 (reranking deltas with CIs) | `results/tables/rerank_deltas.md`, `results/tables/bootstrap_intervals.{json,md}`, `results/tables/final_test_bootstrap.{json,md}` |
 | Table 4, top panel (risk model, cross-validated) | `results/tables/cv_bootstrap_intervals.{json,md}` |
 | Table 4, bottom panel (risk model, held out) | `results/tables/final_test_confidence.md`, `results/tables/final_test_bootstrap.{json,md}` |
-| Table 5 (replication summary) | the tables above, plus `analysis/experiment_log.md` |
-| Table 6 (threshold transfer) | `runs/…_hybrid_rrf_test/threshold_transfer.json` |
+| Table 5 (post-hoc class-weight ablation) | `results/tables/class_weight_ablation.{json,md}` |
+| Table 6 (replication summary) | the tables above, plus `analysis/experiment_log.md` |
+| Table 7 (threshold transfer) | `runs/…_hybrid_rrf_test/threshold_transfer.json` |
 | Dev-protocol values quoted in §4.4 | `results/tables/confidence_comparison.{json,md}`, `results/tables/selective_coverage.md` |
 | AUPRC floor (0.852 / 0.088 / 0.110) | `runs/…_hybrid_rrf_calibration-train/confidence_cv_metrics.json` |
 | Dataset counts (§3.1) | `results/tables/dataset_stats.json` |

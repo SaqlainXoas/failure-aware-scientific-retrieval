@@ -114,8 +114,9 @@ change is in the type of failure: the fraction of failures caused by the first s
 76\% to 25\%, while reranking failures become more common. We also find that the cross-encoder
 does not significantly improve ranking quality on the held-out split. A logistic model trained on
 features from the retrieval output separates failing queries better than the raw reranker score,
-but is significantly worse calibrated, so it is more useful for abstention and routing than for
-reporting confidence. Overall, better first-stage recall did not lead to a comparable improvement
+but as pre-specified is significantly worse calibrated, so it is more useful for abstention and
+routing than for reporting confidence; a post-hoc ablation attributes that miscalibration to the
+pre-specified class weighting, which cost probability quality without buying discrimination. Overall, better first-stage recall did not lead to a comparable improvement
 in final top-10 success, and a larger share of the remaining failures occurred at the reranking
 stage. Our findings apply to SciFact and the models we evaluate.
 \end{abstract}
@@ -168,8 +169,10 @@ contrary to our working hypothesis.
         ranking quality here, and a stronger calibration-set claim of degradation did not
         replicate held out (Sections~\ref{sec:rerank}, \ref{sec:heldout}).
   \item A lightweight inference-time failure-risk model that improves discrimination over the
-        raw reranker score while producing significantly worse probability calibration, two
-        properties usually reported as one (Section~\ref{sec:risk}).
+        raw reranker score while, as pre-specified, producing significantly worse probability
+        calibration --- two properties usually reported as one --- together with a post-hoc
+        ablation attributing that calibration loss to the pre-specified class weighting rather
+        than to the feature set (Section~\ref{sec:risk}).
   \item A leakage-conscious process in which the SciFact test split was opened exactly once,
         after models, features, thresholds and the primary-pipeline rule were fixed
         (Sections~\ref{sec:leakage}, \ref{sec:reproducibility}).
@@ -640,14 +643,47 @@ below 0.3, leaving its first three bins empty.}
 \end{figure}
 
 Figure~\ref{fig:reliability} shows the mechanism. The risk model's points lie above the
-diagonal at nearly every bin: it systematically understates the probability of success. This is
-a direct consequence of \texttt{class\_weight="balanced"}, which up-weights the minority failure
-class and pulls predicted probabilities down. That setting was fixed in advance from the
-training-split class imbalance; it was not revised after the Brier result appeared, and no
-unweighted variant is reported, because selecting one post hoc would convert a pre-specified
-choice into a tuned one. The same wider spread of predictions explains both results: more
-separation between queries improves the ranking metrics, and pushing predictions toward the
-extremes costs the model on Brier.
+diagonal at nearly every bin: it systematically understates the probability of success. The same
+wider spread of predictions explains both results: more separation between queries improves the
+ranking metrics, and pushing predictions toward the extremes costs the model on Brier.
+
+\paragraph{Class-weight ablation.}
+\texttt{class\_weight="balanced"} was fixed in advance from the training-split class imbalance and
+was never revised, so the model reported above is the pre-specified one throughout. To test
+whether that setting is what costs the model its probability quality, we refit the same features
+without it --- on the same folds, with the same seed --- after the result above had been observed.
+Table~\ref{tab:ablation} reports it as a post-hoc ablation, not as a competing configuration.
+Removing the weighting improves Brier on every pipeline with every interval excluding zero, while
+leaving AUROC unchanged with every interval crossing zero; the unweighted refit is also better
+calibrated than the Platt baseline the pre-specified model lost to. The calibration deficit
+therefore belongs to the class weighting rather than to the feature set, and the weighting bought
+no discrimination in exchange. Because the held-out split was spent before this ablation existed
+(Section~\ref{sec:heldout}), the unweighted model has no out-of-sample evaluation: it explains the
+pre-specified result and does not replace it.
+
+\begin{table}[tbp]
+\centering
+\footnotesize
+\caption{Post-hoc class-weight ablation, cross-validated over all 809 calibration queries.
+Differences are unweighted $-$ comparator with 95\% paired bootstrap intervals (1{,}000
+resamples, seed 42). Brier is a loss, so negative is better; AUROC is a score, so a negative
+value there would mean discrimination was given up. Bold marks intervals excluding zero.}
+\label{tab:ablation}
+\begin{tabular}{lrrccc}
+\toprule
+ & \multicolumn{2}{c}{Brier} & \multicolumn{2}{c}{$\Delta$ Brier vs.} & $\Delta$ AUROC \\
+\cmidrule(lr){2-3}\cmidrule(lr){4-5}\cmidrule(lr){6-6}
+Pipeline & pre-spec. & unweighted & pre-specified & Platt & vs.\ pre-specified \\
+\midrule
+BM25         & 0.163 & 0.103 & $\mathbf{-0.060}$ & $\mathbf{-0.012}$ & $+0.001$ \\
+             &       &       & $\mathbf{[-0.074, -0.046]}$ & $\mathbf{[-0.019, -0.005]}$ & $[-0.001, +0.004]$ \\
+Dense (BGE)  & 0.162 & 0.096 & $\mathbf{-0.066}$ & $\mathbf{-0.015}$ & $+0.002$ \\
+             &       &       & $\mathbf{[-0.081, -0.050]}$ & $\mathbf{[-0.023, -0.006]}$ & $[-0.002, +0.005]$ \\
+Hybrid (RRF) & 0.171 & 0.102 & $\mathbf{-0.070}$ & $\mathbf{-0.012}$ & $-0.001$ \\
+             &       &       & $\mathbf{[-0.084, -0.054]}$ & $\mathbf{[-0.019, -0.004]}$ & $[-0.003, +0.002]$ \\
+\bottomrule
+\end{tabular}
+\end{table}
 
 \begin{figure}[tbp]
 \centering
@@ -814,8 +850,11 @@ significant in the cross-validated estimate, and the calibration degradation is 
 held out as well. For a routing or abstention system, which consumes an ordering and a cutoff,
 that trade is often acceptable; for anything that displays a confidence number to a user, it is
 not. Because the class weighting responsible for the compression was fixed in advance and never
-revised, we report the trade instead of tuning it away. That also means the attribution to class
-weighting is an interpretation supported by the reliability diagram, not a measured ablation.
+revised, the model we report is the pre-specified one; the ablation in Section~\ref{sec:risk}
+then shows that the trade was avoidable, since removing that weighting recovers calibration
+without costing discrimination. What we would expect to carry over is therefore not the trade
+itself but the reason for measuring the two properties apart: reported alone, AUROC would have
+hidden the defect and Brier would have made its remedy look like a loss.
 
 Finally, the protocol is part of what the study offers. Because the failure definitions, leakage
 rules, metrics and comparison list were all fixed before any run existed, the non-replication in
@@ -843,9 +882,12 @@ MS MARCO $\rightarrow$ SciFact transfer for one specific cross-encoder, not abou
 in general; a domain-adapted reranker might behave very differently. RRF likewise ran at
 $k = 60$ untuned, so the hybrid pipeline is a fixed comparator, not an optimized system.
 
-\paragraph{One risk-model configuration.} The Brier degradation is consistent with the
-pre-specified class weighting, but no unweighted ablation was run, so that attribution is an
-interpretation rather than a measurement.
+\paragraph{One risk-model configuration, and one unvalidated alternative.} The Brier degradation
+is attributable to the pre-specified class weighting, measured by the post-hoc ablation in
+Section~\ref{sec:risk}. That ablation is calibration-data only: the held-out split had been spent
+before it existed, so the better-calibrated unweighted model has never been evaluated out of
+sample and cannot be recommended on the strength of these results alone. No other hyperparameter
+of the risk model was varied.
 
 \paragraph{Annotated evidence is not scientific truth.} A topically excellent non-annotated
 abstract counts as a failure in these tables, and Section~\ref{sec:qualitative} shows concrete
@@ -873,7 +915,10 @@ MS MARCO cross-encoder, reranking does not reliably improve final ranking qualit
 also turns out to be predictable from retrieval-internal signals alone: a lightweight risk model
 orders at-risk queries better than the reranker's own score and carries an abstention cutoff
 across splits more consistently, while stating significantly worse-calibrated probabilities than
-a one-parameter Platt baseline.
+a one-parameter Platt baseline. A post-hoc ablation locates that miscalibration in the
+pre-specified class weighting rather than in the features: refitting without it recovers
+calibration at unchanged discrimination, though a spent test split leaves that refit unvalidated
+out of sample.
 
 Two of these results are negative. A fourth, that reranking significantly degrades dense
 retrieval, appeared on calibration data and did not survive held-out evaluation; we report it as

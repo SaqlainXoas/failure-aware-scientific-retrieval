@@ -50,10 +50,17 @@ venue is one of the questions below.
 
 6. **Would additional experiments be essential for peer-reviewed acceptance?**
    The obvious candidates are (a) a second dataset to test whether the composition shift
-   generalizes, (b) a domain-adapted or larger reranker to separate "this cross-encoder" from
-   "cross-encoders", and (c) an unweighted-risk-model ablation to test whether the Brier
-   degradation really is attributable to class weighting. (c) is cheap; (a) and (b) are real
-   work. Which, if any, are prerequisites rather than future work?
+   generalizes and (b) a domain-adapted or larger reranker to separate "this cross-encoder" from
+   "cross-encoders". Both are real work. Which, if either, is a prerequisite rather than future
+   work?
+   The third candidate, an unweighted-risk-model ablation, **has since been run** and is
+   reported in Section 4.4. It confirmed that the Brier degradation comes from the pre-specified
+   class weighting: refitting the same features unweighted improves Brier on every pipeline, beats
+   the Platt baseline it previously lost to, and leaves AUROC unchanged. I kept the pre-specified
+   weighted model as the primary result and report the refit as a post-hoc explanation, since the
+   test split was already spent and it therefore has no out-of-sample evaluation. I would value
+   your view on whether that is the right call, or whether a reader would expect the
+   better-calibrated configuration to be promoted despite lacking held-out validation.
    One constraint worth flagging: **the SciFact test split is spent.** It was evaluated once,
    by design, so any new experiment on this pipeline cannot be validated against untouched
    SciFact held-out data. A second dataset may therefore be the only clean way to add
@@ -105,7 +112,7 @@ conservative enough.
 4. **Author metadata.** No ORCID is included yet. I will register one before any submission.
 5. **Length versus format.** The brief for this draft asked for single-column, 11pt, A4 and
    roughly 7--10 pages of main content. Those two constraints pull against each other: the
-   manuscript runs 14 pages of main content plus 2 of references in single-column 11pt, which is
+   manuscript runs 15 pages of main content plus 2 of references in single-column 11pt, which is
    about 7--8 pages of a typical two-column proceedings template. I chose not to cut further,
    because the remaining material is method detail, uncertainty reporting and the honest
    caveats. If you want it genuinely shorter, tell me what to drop --- my own candidates are the

@@ -40,10 +40,15 @@ over a comparison list fixed in advance.
 2. **The evaluated cross-encoder does not reliably improve final ranking here.** Rescues and
    degradations are of similar magnitude, and no held-out before/after difference is
    significant for any pipeline.
-3. **Failure is predictable, but the probabilities are not trustworthy.** An eight-feature
-   logistic failure-risk model beats the raw reranker score at ordering queries by risk
-   (cross-validated AUROC +0.065 to +0.083, all intervals excluding zero) and is significantly
-   worse-calibrated (Brier +0.048 to +0.058, replicated held out at +0.048 to +0.075).
+3. **Failure is predictable, but the pre-specified model's probabilities are not trustworthy.**
+   An eight-feature logistic failure-risk model beats the raw reranker score at ordering queries
+   by risk (cross-validated AUROC +0.065 to +0.083, all intervals excluding zero) and is
+   significantly worse-calibrated (Brier +0.048 to +0.058, replicated held out at +0.048 to
+   +0.075). A post-hoc ablation locates that miscalibration in the pre-specified
+   `class_weight="balanced"`: refitting the same features unweighted improves Brier by −0.060 to
+   −0.070, beats even the Platt baseline, and leaves AUROC unchanged. The weighting cost
+   probability quality and bought no discrimination. It is calibration-data only, so the
+   unweighted refit is an explanation of the pre-specified result, not a validated replacement.
 4. **The abstention cutoff transferred more consistently than the raw score's.** At a 60%
    coverage target the risk model's calibration-dev cutoff kept 58.0% of held-out queries; the
    raw score's kept 48.3%. This is a statement about the score distribution, not about
@@ -67,8 +72,9 @@ One small dataset, so nothing here shows the composition shift generalizes. Abou
 the development split and about 50 held out, which is why a cross-validated secondary analysis
 exists and why the held-out AUROC comparison is directionally consistent but not individually
 significant. All models frozen and general-domain, so the reranking result is evidence about one
-specific MS MARCO → SciFact transfer. Only one risk-model configuration; the attribution of the
-Brier degradation to class weighting is an interpretation, not a measured ablation. SciFact
+specific MS MARCO → SciFact transfer. The attribution of the Brier degradation to class weighting
+is now measured, but on calibration data only — the better-calibrated unweighted refit has no
+out-of-sample evaluation, and no other risk-model hyperparameter was varied. SciFact
 qrels mark annotated evidence, not scientific truth. And the test split is now spent: no
 untouched validation data remains for future changes to this system.
 
