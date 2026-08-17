@@ -16,4 +16,4 @@ Protocol: stratified 5-fold cross-validation over calibration-train + calibratio
 | hybrid_rrf_cv_auprc_raw_vs_common_calibrated | AUPRC | 0.939 | 0.962 | +0.023 | [+0.009, +0.039] | yes | 809 | 120 |
 | hybrid_rrf_cv_brier_platt_vs_common_calibrated | Brier | 0.113 | 0.171 | +0.058 | [+0.039, +0.076] | yes | 809 | 120 |
 
-Sources: `bm25` → `2026-08-11T071021.766876Z_bm25_calibration-train` @ `58b849b35f849dd9738174d950f621580462c7a5`, `dense_bge` → `2026-08-11T071027.086483Z_dense_bge_calibration-train` @ `58b849b35f849dd9738174d950f621580462c7a5`, `hybrid_rrf` → `2026-08-11T071032.700346Z_hybrid_rrf_calibration-train` @ `58b849b35f849dd9738174d950f621580462c7a5`.
+Sources: `bm25` → `2026-08-17T095329.197391Z_bm25_calibration-train` @ `7d2b4aeb7a810d9d55d6b64c5502c5c157e596db`, `dense_bge` → `2026-08-17T095337.535188Z_dense_bge_calibration-train` @ `7d2b4aeb7a810d9d55d6b64c5502c5c157e596db`, `hybrid_rrf` → `2026-08-17T095349.389304Z_hybrid_rrf_calibration-train` @ `7d2b4aeb7a810d9d55d6b64c5502c5c157e596db`.
