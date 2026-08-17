@@ -286,9 +286,16 @@ and the calibration-train runs are four times the queries.
 
 ## Longer write-up
 
-[`paper/report.md`](paper/report.md) is a 4–6 page version of this study with the full method,
-related work, the qualitative failure analysis, and the reasoning behind each choice. See
-[`paper/README.md`](paper/README.md) for the one-line pandoc build.
+[`report/report.md`](report/report.md) is a 4–6 page version of this study with the full method,
+related work, the qualitative failure analysis, and the reasoning behind each choice. It reads the
+figures from `results/figures/` rather than copying them, so it cannot drift from the committed
+results, and every number in it comes from `results/tables/*.json`.
+
+Build outputs are not committed. To render it as a single portable HTML file:
+
+```bash
+pandoc report/report.md --standalone --embed-resources --toc --number-sections --resource-path=report:. -o report/report.html
+```
 
 ## Layout
 
@@ -306,12 +313,12 @@ retrieval/
 ├── run.py         pipeline entrypoint
 └── runio.py       run-directory persistence and manifests
 
-results/tables/    14 tables as canonical .json, 12 with a .md view for reading
+results/tables/    15 tables as canonical .json, 13 with a .md view for reading
 results/figures/   5 figures, with figure_provenance.json naming their source runs
 results/manifests/ the manifest of every run backing a committed number
 analysis/          experiment log, and 12 hand-annotated failure cases
 splits/            the committed calibration query IDs
-paper/             the longer write-up
+report/            the longer write-up
 ```
 
 Every committed number traces to a run directory, a git commit, and a model revision through

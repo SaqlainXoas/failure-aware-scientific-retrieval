@@ -13,8 +13,9 @@ wheels/
 .pytest_cache/
 .uv-cache/
 
-# Local planning notes, not published.
+# Local working material, not published: planning notes and manuscript drafts.
 docs/
+paper/
 
 # Retrieval run outputs and disk cache (regenerable, not tracked)
 runs/*
@@ -22,8 +23,8 @@ runs/*
 .cache/
 
 # Built report; the Markdown source is what's tracked
-paper/report.html
-paper/report.pdf
+report/report.html
+report/report.pdf
 
 # macOS
 .DS_Store
