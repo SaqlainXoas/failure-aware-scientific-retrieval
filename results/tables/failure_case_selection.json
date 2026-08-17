@@ -18,10 +18,10 @@
   },
   "provenance": {
     "confidence_predictions": {
-      "run_dir": "2026-08-11T071032.700346Z_hybrid_rrf_calibration-train",
+      "run_dir": "2026-08-17T095349.389304Z_hybrid_rrf_calibration-train",
       "run_split": "calibration-train",
       "pipeline": "hybrid_rrf",
-      "git_commit": "58b849b35f849dd9738174d950f621580462c7a5",
+      "git_commit": "7d2b4aeb7a810d9d55d6b64c5502c5c157e596db",
       "git_dirty": false,
       "dataset": "beir/scifact",
       "model_name": "BAAI/bge-small-en-v1.5",
@@ -59,7 +59,7 @@
       "pipeline": "hybrid_rrf",
       "confidence_model": "calibrated",
       "source_runs": [
-        "2026-08-11T071032.700346Z_hybrid_rrf_calibration-train",
+        "2026-08-17T095349.389304Z_hybrid_rrf_calibration-train",
         "2026-08-11T071029.770459Z_hybrid_rrf_calibration-dev"
       ]
     },
@@ -75,7 +75,7 @@
       "pipeline": "hybrid_rrf",
       "confidence_model": "calibrated",
       "source_runs": [
-        "2026-08-11T071032.700346Z_hybrid_rrf_calibration-train",
+        "2026-08-17T095349.389304Z_hybrid_rrf_calibration-train",
         "2026-08-11T071029.770459Z_hybrid_rrf_calibration-dev"
       ]
     },
@@ -91,7 +91,7 @@
       "pipeline": "hybrid_rrf",
       "confidence_model": "calibrated",
       "source_runs": [
-        "2026-08-11T071032.700346Z_hybrid_rrf_calibration-train",
+        "2026-08-17T095349.389304Z_hybrid_rrf_calibration-train",
         "2026-08-11T071029.770459Z_hybrid_rrf_calibration-dev"
       ]
     },
@@ -107,7 +107,7 @@
       "pipeline": "hybrid_rrf",
       "confidence_model": "calibrated",
       "source_runs": [
-        "2026-08-11T071032.700346Z_hybrid_rrf_calibration-train",
+        "2026-08-17T095349.389304Z_hybrid_rrf_calibration-train",
         "2026-08-11T071029.770459Z_hybrid_rrf_calibration-dev"
       ]
     },
@@ -123,7 +123,7 @@
       "pipeline": "hybrid_rrf",
       "confidence_model": "calibrated",
       "source_runs": [
-        "2026-08-11T071032.700346Z_hybrid_rrf_calibration-train",
+        "2026-08-17T095349.389304Z_hybrid_rrf_calibration-train",
         "2026-08-11T071029.770459Z_hybrid_rrf_calibration-dev"
       ]
     },
@@ -139,7 +139,7 @@
       "pipeline": "hybrid_rrf",
       "confidence_model": "calibrated",
       "source_runs": [
-        "2026-08-11T071032.700346Z_hybrid_rrf_calibration-train",
+        "2026-08-17T095349.389304Z_hybrid_rrf_calibration-train",
         "2026-08-11T071029.770459Z_hybrid_rrf_calibration-dev"
       ]
     },
@@ -155,7 +155,7 @@
       "pipeline": "hybrid_rrf",
       "confidence_model": "calibrated",
       "source_runs": [
-        "2026-08-11T071032.700346Z_hybrid_rrf_calibration-train",
+        "2026-08-17T095349.389304Z_hybrid_rrf_calibration-train",
         "2026-08-11T071029.770459Z_hybrid_rrf_calibration-dev"
       ]
     },
@@ -171,7 +171,7 @@
       "pipeline": "hybrid_rrf",
       "confidence_model": "calibrated",
       "source_runs": [
-        "2026-08-11T071032.700346Z_hybrid_rrf_calibration-train",
+        "2026-08-17T095349.389304Z_hybrid_rrf_calibration-train",
         "2026-08-11T071029.770459Z_hybrid_rrf_calibration-dev"
       ]
     },
@@ -187,7 +187,7 @@
       "pipeline": "hybrid_rrf",
       "confidence_model": "calibrated",
       "source_runs": [
-        "2026-08-11T071032.700346Z_hybrid_rrf_calibration-train",
+        "2026-08-17T095349.389304Z_hybrid_rrf_calibration-train",
         "2026-08-11T071029.770459Z_hybrid_rrf_calibration-dev"
       ]
     },
@@ -203,7 +203,7 @@
       "pipeline": "hybrid_rrf",
       "confidence_model": "calibrated",
       "source_runs": [
-        "2026-08-11T071032.700346Z_hybrid_rrf_calibration-train",
+        "2026-08-17T095349.389304Z_hybrid_rrf_calibration-train",
         "2026-08-11T071029.770459Z_hybrid_rrf_calibration-dev"
       ]
     },
@@ -219,7 +219,7 @@
       "pipeline": "hybrid_rrf",
       "confidence_model": "calibrated",
       "source_runs": [
-        "2026-08-11T071032.700346Z_hybrid_rrf_calibration-train",
+        "2026-08-17T095349.389304Z_hybrid_rrf_calibration-train",
         "2026-08-11T071029.770459Z_hybrid_rrf_calibration-dev"
       ]
     },
@@ -235,7 +235,7 @@
       "pipeline": "hybrid_rrf",
       "confidence_model": "calibrated",
       "source_runs": [
-        "2026-08-11T071032.700346Z_hybrid_rrf_calibration-train",
+        "2026-08-17T095349.389304Z_hybrid_rrf_calibration-train",
         "2026-08-11T071029.770459Z_hybrid_rrf_calibration-dev"
       ]
     }

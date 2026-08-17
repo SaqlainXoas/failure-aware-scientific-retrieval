@@ -8,7 +8,11 @@ import json
 from pathlib import Path
 from typing import Any
 
-from retrieval.confidence import bootstrap_mean_comparison, bootstrap_score_comparison
+from retrieval.confidence import (
+    ABLATION_MODEL,
+    bootstrap_mean_comparison,
+    bootstrap_score_comparison,
+)
 from retrieval.data import read_split_file
 from retrieval.plots import (
     plot_failure_breakdown,
@@ -336,23 +340,50 @@ CV_COMPARISONS = (
 )
 
 
-def build_cv_bootstrap_artifact(runs_dir: str | Path = RUNS_DIR) -> dict[str, Any]:
-    """Bootstraps the raw-vs-calibrated comparison on pooled out-of-fold predictions: the same
-    paired procedure as the predeclared analysis, over ~6x the failures. Written to its own
-    artifact so it can never be mistaken for the predeclared train/dev result."""
+ABLATION_COMPARISONS = (
+    ("cv_brier_platt_vs_unweighted", "brier", "train_fitted_platt", "unweighted_calibrator", "raw_score_platt", ABLATION_MODEL, True, True),
+    ("cv_brier_balanced_vs_unweighted", "brier", "common_feature_calibrated", "unweighted_calibrator", "calibrated", ABLATION_MODEL, True, True),
+    ("cv_auroc_balanced_vs_unweighted", "auroc", "common_feature_calibrated", "unweighted_calibrator", "calibrated", ABLATION_MODEL, True, True),
+)
+
+CV_BOOTSTRAP_PROTOCOL = {
+    "unit": "query_id",
+    "paired": True,
+    "difference_direction": "B - A",
+    "n_resamples": BOOTSTRAP_RESAMPLES,
+    "confidence_level": BOOTSTRAP_CONFIDENCE_LEVEL,
+    "interval": "percentile",
+    "seed": BOOTSTRAP_SEED,
+}
+
+
+def _cv_comparison_rows(
+    runs_dir: str | Path, comparisons: tuple[tuple, ...]
+) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    """Runs one list of paired comparisons over each pipeline's pooled out-of-fold predictions.
+
+    Shared by the predeclared cross-validated analysis and the post-hoc class-weight ablation, so
+    both are bootstrapped by identical code and only the comparison list differs."""
     rows: list[dict[str, Any]] = []
     provenance: dict[str, Any] = {}
     for pipeline in PIPELINES:
         run_dir = latest_run_dirs(runs_dir, CALIBRATION_SPLIT).get(pipeline)
         if run_dir is None or not (run_dir / "confidence_cv_predictions.jsonl").exists():
             continue
-        provenance[pipeline] = source_provenance(run_dir)
         predictions = load_jsonl(run_dir / "confidence_cv_predictions.jsonl")
+        if not predictions:
+            continue
         query_ids = [row["query_id"] for row in predictions]
         labels = {row["query_id"]: bool(row["final_success_10"]) for row in predictions}
         by_query = {row["query_id"]: row for row in predictions}
+        available = set(predictions[0])
 
-        for comparison_id, metric, label_a, label_b, field_a, field_b, prob_a, prob_b in CV_COMPARISONS:
+        pipeline_rows: list[dict[str, Any]] = []
+        for comparison_id, metric, label_a, label_b, field_a, field_b, prob_a, prob_b in comparisons:
+            # A run saved before a model existed carries no column for it; skip rather than
+            # fabricate, so old artifacts stay readable.
+            if not {field_a, field_b} <= available:
+                continue
             result = _rounded_bootstrap(
                 bootstrap_score_comparison(
                     labels,
@@ -367,7 +398,7 @@ def build_cv_bootstrap_artifact(runs_dir: str | Path = RUNS_DIR) -> dict[str, An
                 )
             )
             excludes_zero = result["ci_lower"] > 0.0 or result["ci_upper"] < 0.0
-            rows.append(
+            pipeline_rows.append(
                 {
                     "comparison_id": f"{pipeline}_{comparison_id}",
                     "pipeline": pipeline,
@@ -379,6 +410,17 @@ def build_cv_bootstrap_artifact(runs_dir: str | Path = RUNS_DIR) -> dict[str, An
                     "n_failures": sum(1 for qid in query_ids if not labels[qid]),
                 }
             )
+        if pipeline_rows:
+            provenance[pipeline] = source_provenance(run_dir)
+            rows.extend(pipeline_rows)
+    return rows, provenance
+
+
+def build_cv_bootstrap_artifact(runs_dir: str | Path = RUNS_DIR) -> dict[str, Any]:
+    """Bootstraps the raw-vs-calibrated comparison on pooled out-of-fold predictions: the same
+    paired procedure as the predeclared analysis, over ~6x the failures. Written to its own
+    artifact so it can never be mistaken for the predeclared train/dev result."""
+    rows, provenance = _cv_comparison_rows(runs_dir, CV_COMPARISONS)
     return {
         "protocol": "stratified 5-fold cross-validation over calibration-train + calibration-dev",
         "why": (
@@ -386,15 +428,33 @@ def build_cv_bootstrap_artifact(runs_dir: str | Path = RUNS_DIR) -> dict[str, An
             "too few to separate the confidence models. Pooling out-of-fold predictions over all "
             "calibration queries raises the failure count without touching the test split."
         ),
-        "bootstrap": {
-            "unit": "query_id",
-            "paired": True,
-            "difference_direction": "B - A",
-            "n_resamples": BOOTSTRAP_RESAMPLES,
-            "confidence_level": BOOTSTRAP_CONFIDENCE_LEVEL,
-            "interval": "percentile",
-            "seed": BOOTSTRAP_SEED,
-        },
+        "bootstrap": {**CV_BOOTSTRAP_PROTOCOL},
+        "provenance": provenance,
+        "rows": rows,
+    }
+
+
+def build_class_weight_ablation_artifact(runs_dir: str | Path = RUNS_DIR) -> dict[str, Any]:
+    """Tests whether the predeclared `class_weight="balanced"` is what degrades the risk model's
+    probability calibration, by refitting the same features unweighted on the same folds.
+
+    Kept in its own artifact because, unlike every comparison in the predeclared list, it was
+    specified *after* the Brier degradation was observed."""
+    rows, provenance = _cv_comparison_rows(runs_dir, ABLATION_COMPARISONS)
+    return {
+        "protocol": "stratified 5-fold cross-validation over calibration-train + calibration-dev",
+        "status": "post-hoc ablation, specified after observing the calibration-set Brier result",
+        "why": (
+            "The manuscript attributes the risk model's worse-than-baseline Brier score to the "
+            "predeclared class weighting, which up-weights the minority failure class and pulls "
+            "predicted probabilities down. That attribution was an interpretation until this "
+            "ablation measured it."
+        ),
+        "not_used_for": (
+            "model selection; the primary model remains the class-weighted calibrator, and no "
+            "predeclared result was recomputed or replaced"
+        ),
+        "bootstrap": {**CV_BOOTSTRAP_PROTOCOL},
         "provenance": provenance,
         "rows": rows,
     }
@@ -582,21 +642,26 @@ def _bootstrap_table_lines(
     return lines
 
 
+CV_TABLE_COLUMNS = [
+    "comparison_id",
+    "metric",
+    "point_estimate_a",
+    "point_estimate_b",
+    "difference",
+    "95% CI",
+    "excludes_zero",
+    "n_queries",
+    "n_failures",
+]
+
+
+def _cv_table_headers() -> list[str]:
+    return [column if column == "95% CI" else column_label(column) for column in CV_TABLE_COLUMNS]
+
+
 def render_cv_bootstrap_markdown(payload: dict[str, Any]) -> str:
-    columns = [
-        "comparison_id",
-        "metric",
-        "point_estimate_a",
-        "point_estimate_b",
-        "difference",
-        "95% CI",
-        "excludes_zero",
-        "n_queries",
-        "n_failures",
-    ]
-    headers = [
-        column if column == "95% CI" else column_label(column) for column in columns
-    ]
+    columns = CV_TABLE_COLUMNS
+    headers = _cv_table_headers()
     lines = [
         "# Cross-validated bootstrap intervals (higher-powered secondary analysis)",
         "",
@@ -611,6 +676,34 @@ def render_cv_bootstrap_markdown(payload: dict[str, Any]) -> str:
         ),
         "",
         *_bootstrap_table_lines(payload["rows"], columns, headers),
+    ]
+    provenance = ", ".join(
+        f"`{name}` → `{source['run_dir']}` @ `{source['git_commit']}`"
+        for name, source in payload["provenance"].items()
+    )
+    lines.extend(["", f"Sources: {provenance}.", ""])
+    return "\n".join(lines)
+
+
+def render_class_weight_ablation_markdown(payload: dict[str, Any]) -> str:
+    lines = [
+        "# Class-weight ablation (post-hoc)",
+        "",
+        f"**Status:** {payload['status']}. Not used for {payload['not_used_for']}.",
+        "",
+        payload["why"],
+        "",
+        (
+            f"Protocol: {payload['protocol']}. Difference: `B - A`, where B is always the "
+            "unweighted refit of the common-feature model. Brier is a loss, so a *negative* "
+            "difference means the unweighted model is better calibrated; AUROC is a score, so a "
+            "negative difference there means discrimination was given up in exchange. "
+            f"{payload['bootstrap']['n_resamples']} paired resamples, "
+            f"{payload['bootstrap']['confidence_level']:.0%} percentile intervals, "
+            f"seed {payload['bootstrap']['seed']}."
+        ),
+        "",
+        *_bootstrap_table_lines(payload["rows"], CV_TABLE_COLUMNS, _cv_table_headers()),
     ]
     provenance = ", ".join(
         f"`{name}` → `{source['run_dir']}` @ `{source['git_commit']}`"
@@ -693,6 +786,16 @@ def write_phase5_artifacts(
         )
         (destination / "cv_bootstrap_intervals.md").write_text(
             render_cv_bootstrap_markdown(cv_bootstrap)
+        )
+
+    ablation = build_class_weight_ablation_artifact(runs_dir)
+    if ablation["rows"]:
+        destination = Path(tables_dir)
+        (destination / "class_weight_ablation.json").write_text(
+            json.dumps(ablation, indent=2) + "\n"
+        )
+        (destination / "class_weight_ablation.md").write_text(
+            render_class_weight_ablation_markdown(ablation)
         )
 
     final_test = build_final_test_bootstrap(runs_dir)

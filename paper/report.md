@@ -16,7 +16,8 @@ abstract: |
   Finally, an eight-feature logistic calibrator over retrieval-internal signals predicts which
   queries will fail better than the reranker's own score (AUROC +0.065 to +0.083 under
   cross-validation, all intervals excluding zero) while producing significantly worse-calibrated
-  probabilities (Brier +0.048 to +0.058). All definitions, leakage rules, and statistical
+  probabilities (Brier +0.048 to +0.058) — a miscalibration a post-hoc ablation traces to the
+  predeclared class weighting rather than to the features. All definitions, leakage rules, and statistical
   comparisons were fixed before any result existed, and the 300-query SciFact test split was
   opened exactly once, at the end, with every model and threshold already locked. The
   decomposition result and the calibration weakness both replicate held-out; a calibration-set
@@ -289,8 +290,16 @@ The reliability diagram shows the mechanism. The calibrator's points lie above t
 nearly every bin, meaning it systematically understates success probability — a direct
 consequence of `class_weight="balanced"`, which up-weights the minority failure class and pulls
 predicted probabilities down. That setting was fixed in advance from the training-split class
-imbalance. It was not revised after the Brier result appeared, and no unweighted variant is
-reported, because selecting it post hoc would convert a predeclared choice into a tuned one.
+imbalance and was never revised, so the model reported throughout is the predeclared one.
+
+A post-hoc ablation measures that attribution rather than asserting it. Refitting the same
+features without the weighting, on the same folds and seed, improves Brier on every pipeline —
+`-0.060` (BM25), `-0.066` (dense), `-0.070` (hybrid), every interval excluding zero — beats even
+the Platt baseline the predeclared model lost to, and leaves AUROC unchanged (`+0.001`, `+0.002`,
+`-0.001`, every interval crossing zero). The calibration deficit belongs to the weighting rather
+than to the feature set, and the weighting bought no discrimination in exchange. The test split
+was already spent when this ablation was run, so the unweighted refit has no out-of-sample
+evaluation and explains the predeclared result instead of replacing it.
 
 The two panels hold a different number of points for a substantive reason. The Platt-scaled
 baseline never predicts below 0.3, leaving its first three bins empty, whereas the calibrator
@@ -404,9 +413,11 @@ dev-only intervals should be read as underpowered rather than as evidence of no 
 **Off-the-shelf models.** Every model is frozen and general-domain. The reranking result is
 evidence about MS MARCO → SciFact transfer specifically.
 
-**One calibrator configuration.** The Brier degradation is consistent with the predeclared
-class weighting, but no unweighted ablation was run, so that attribution is an interpretation
-rather than a measurement.
+**One calibrator configuration, and one unvalidated alternative.** The Brier degradation is
+attributable to the predeclared class weighting, measured by the post-hoc ablation above. That
+ablation is calibration-data only: the held-out split had been spent before it existed, so the
+better-calibrated unweighted refit has never been evaluated out of sample and cannot be
+recommended on these results alone. No other calibrator hyperparameter was varied.
 
 **The held-out split is spent.** It was evaluated once, as designed, and will not be used again.
 Any further change to this system cannot be validated the same way, and the 300-query held-out

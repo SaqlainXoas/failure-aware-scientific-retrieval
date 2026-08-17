@@ -8,7 +8,12 @@ These tests spy on the actual `Pipeline.fit` calls to assert that.
 import pytest
 import sklearn.pipeline
 
-from retrieval.confidence import COMMON_FEATURES, confidence_metrics, cross_validated_predictions
+from retrieval.confidence import (
+    ABLATION_MODEL,
+    COMMON_FEATURES,
+    confidence_metrics,
+    cross_validated_predictions,
+)
 from retrieval.run import run_calibration
 
 # confidence_cv_folds=0 disables the pooled cross-validated estimate, so these tests assert the
@@ -246,3 +251,91 @@ def test_cross_validated_estimate_is_reported_separately_from_the_protocol_resul
     assert cv["n_splits"] == 5
     assert set(cv["results"]) == {"raw_score", "raw_score_platt", "calibrated"}
     assert [row["query_id"] for row in cv["predictions"]] == sorted(train_ids + dev_ids)
+
+
+# --- Post-hoc class-weight ablation -----------------------------------------------------------
+# The ablation refits the primary feature set without class weighting. It exists to measure a
+# claim the manuscript previously only asserted, so what these tests guard is that adding it
+# cannot quietly change the predeclared result: it must stay off the primary slot, and it must
+# obey the same train-only fitting rule as every other model.
+
+WEIGHTED_CONFIG = {**CONFIG, "confidence_class_weight": "balanced"}
+
+
+def _run_weighted(fit_spy, **overrides):
+    train_ids = [f"train{i}" for i in range(20)]
+    dev_ids = [f"dev{i}" for i in range(10)]
+    dev_features = _features(dev_ids, offset=100.0)
+    calibration = run_calibration(
+        {**WEIGHTED_CONFIG, **overrides},
+        _features(train_ids),
+        _labels(train_ids),
+        _reranked_rows(train_ids),
+        dev_features,
+        _labels(dev_ids),
+        {qid: "already_successful" for qid in dev_ids},
+        _reranked_rows(dev_ids, offset=100.0),
+    )
+    return calibration, train_ids, dev_features
+
+
+def test_no_ablation_is_fitted_when_no_class_weight_is_configured(fit_spy):
+    calibration, _, _, _ = _run(fit_spy)
+
+    # Without weighting the ablation would be a duplicate of the primary model, so it is skipped.
+    assert calibration["ablation_models"] == []
+    assert ABLATION_MODEL not in calibration["results"]
+
+
+def test_ablation_is_reported_beside_the_primary_model_and_never_as_it(fit_spy):
+    calibration, _, _ = _run_weighted(fit_spy)
+
+    assert calibration["primary_model"] == "calibrated"
+    assert calibration["ablation_models"] == [ABLATION_MODEL]
+    assert ABLATION_MODEL in calibration["results"]
+    # The two differ in exactly one thing: the class weighting.
+    estimators = calibration["estimators"]
+    assert estimators["calibrated"].named_steps["classifier"].class_weight == "balanced"
+    assert estimators[ABLATION_MODEL].named_steps["classifier"].class_weight is None
+    assert (
+        calibration["feature_names"][ABLATION_MODEL]
+        == calibration["feature_names"]["calibrated"]
+    )
+
+
+def test_ablation_obeys_the_same_train_only_fitting_rule(fit_spy):
+    calibration, train_ids, dev_features = _run_weighted(fit_spy)
+
+    # Platt baseline, primary calibrator, ablation — three fits, none of which saw dev data.
+    assert len(fit_spy) == 3
+    dev_values = {value for feats in dev_features.values() for value in feats.values()}
+    for matrix in fit_spy:
+        assert len(matrix) == len(train_ids)
+        for row in matrix:
+            assert not (set(row) & dev_values)
+    assert calibration["fit_split"] == "calibration-train"
+
+
+def test_cross_validation_honours_a_per_model_class_weight_override():
+    _, features, labels, baseline = _cv_inputs()
+
+    rows = cross_validated_predictions(
+        features,
+        labels,
+        baseline,
+        {"calibrated": COMMON_FEATURES, ABLATION_MODEL: COMMON_FEATURES},
+        class_weight="balanced",
+        class_weights={ABLATION_MODEL: None},
+        n_splits=5,
+        seed=42,
+    )
+
+    # Same features and same folds, so any difference is the class weighting alone.
+    assert any(row["calibrated"] != row[ABLATION_MODEL] for row in rows)
+    for row in rows:
+        assert 0.0 <= row[ABLATION_MODEL] <= 1.0
+    # Balanced weighting up-weights the minority failure class, which pulls predicted success
+    # probabilities down — the mechanism the ablation exists to measure.
+    weighted_mean = sum(row["calibrated"] for row in rows) / len(rows)
+    unweighted_mean = sum(row[ABLATION_MODEL] for row in rows) / len(rows)
+    assert weighted_mean < unweighted_mean

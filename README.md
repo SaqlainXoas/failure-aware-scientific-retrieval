@@ -26,9 +26,15 @@ below.
    states worse probabilities.** The Brier degradation is significant everywhere, including
    held-out (+0.048 to +0.075). The AUROC advantage is consistent in direction everywhere and
    significant only in the higher-powered cross-validated estimate.
+5. **That miscalibration is the class weighting, not the features.** A post-hoc ablation
+   refitting the same features without `class_weight="balanced"` improves Brier on every pipeline
+   (−0.060 to −0.070, all intervals excluding zero), beats even the Platt baseline, and leaves
+   AUROC unchanged. Calibration data only — the test split was already spent, so this explains the
+   predeclared result rather than replacing it.
 
 In short, the calibrator is better at ranking which queries will fail and worse at saying how
-likely one is to fail.
+likely one is to fail — and the second half of that turns out to be a hyperparameter rather than a
+property of the features.
 
 ---
 
@@ -113,7 +119,16 @@ in both is the weaker claim: no pipeline shows a significant gain from reranking
 Lower Brier is better, so the model that wins on AUROC loses on calibration, consistently and
 significantly. This traces to the predeclared `class_weight="balanced"` setting, which trades
 probability quality for minority-class recall. It was left in place rather than tuned away after
-the fact.
+the fact, and the primary model reported everywhere here is that predeclared one.
+
+A post-hoc ablation ([`results/tables/class_weight_ablation.md`](results/tables/class_weight_ablation.md))
+measures that attribution instead of asserting it. Refitting the same features without the
+weighting, on the same folds, improves Brier on every pipeline — `-0.060` (BM25), `-0.066`
+(dense), `-0.070` (hybrid), every interval excluding zero — and beats even the Platt baseline the
+predeclared model lost to, while leaving AUROC unchanged (`+0.001`, `+0.002`, `-0.001`, every
+interval crossing zero). So the weighting cost probability quality and bought no discrimination.
+Because the test split was already spent, the unweighted refit has no out-of-sample evaluation: it
+explains the predeclared result rather than replacing it.
 
 ![Hybrid reliability](results/figures/hybrid_reliability.png)
 

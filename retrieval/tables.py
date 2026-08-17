@@ -9,6 +9,8 @@ import json
 from pathlib import Path
 from typing import Any
 
+from retrieval.confidence import ABLATION_MODEL
+
 RUNS_DIR = "runs"
 SPLIT = "calibration-dev"
 CALIBRATION_SPLIT = "calibration-train"
@@ -22,7 +24,13 @@ MODEL_ROLES = {
     "raw_score_platt": "train_fitted_probability_baseline",
     "calibrated": "common_feature_model",
     "calibrated_hybrid_exploratory": "exploratory_overlap_ablation",
+    ABLATION_MODEL: "post_hoc_class_weight_ablation",
 }
+
+# The post-hoc ablation is deliberately kept out of the predeclared confidence tables and
+# reported in class_weight_ablation.md instead, so the tables the protocol fixed keep exactly
+# the rows they were specified with.
+EXCLUDED_FROM_PREDECLARED_TABLES = frozenset({ABLATION_MODEL})
 
 METRIC_COLUMNS = ["recall@5", "recall@10", "recall@50", "mrr@10", "ndcg@10", "n_queries"]
 DECOMPOSITION_COLUMNS = [
@@ -110,12 +118,14 @@ MODEL_LABELS = {
     "raw_score_platt": "raw score, Platt-scaled",
     "calibrated": "common-feature calibrator",
     "calibrated_hybrid_exploratory": "calibrator + BM25/dense overlap",
+    ABLATION_MODEL: "common-feature calibrator, unweighted",
 }
 MODEL_ROLE_LABELS = {
     "raw_ranking_baseline": "ranking baseline",
     "train_fitted_probability_baseline": "probability baseline",
     "common_feature_model": "primary",
     "exploratory_overlap_ablation": "exploratory ablation",
+    "post_hoc_class_weight_ablation": "post-hoc ablation",
 }
 
 
@@ -291,6 +301,8 @@ def build_confidence_table(artifacts: dict[str, dict[str, Any]]) -> list[dict[st
             continue
         models = artifacts[pipeline]["confidence"]["models"]
         for model, metrics in models.items():
+            if model in EXCLUDED_FROM_PREDECLARED_TABLES:
+                continue
             rows.append(
                 {
                     "pipeline": pipeline,
@@ -315,6 +327,8 @@ def build_selective_table(artifacts: dict[str, dict[str, Any]]) -> list[dict[str
             continue
         models = artifacts[pipeline]["selective"]["models"]
         for model, coverages in models.items():
+            if model in EXCLUDED_FROM_PREDECLARED_TABLES:
+                continue
             row: dict[str, Any] = {
                 "pipeline": pipeline,
                 "is_primary_pipeline": pipeline == PRIMARY_PIPELINE,

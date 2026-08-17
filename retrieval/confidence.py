@@ -24,6 +24,11 @@ RERANK_FEATURES = [
 COMMON_FEATURES = FIRST_STAGE_FEATURES + RERANK_FEATURES
 HYBRID_FEATURES = ["hybrid_bm25_dense_top10_overlap"]
 
+# The primary feature set refitted without class weighting. Named once here because three
+# modules have to agree on the string: run.py fits it, and tables.py and analysis.py have to
+# recognise it in saved artifacts to keep it out of the predeclared tables.
+ABLATION_MODEL = "calibrated_unweighted"
+
 
 def confidence_feature_names(pipeline: str) -> list[str]:
     """The common feature set — the primary model for every pipeline, hybrid included."""
@@ -411,10 +416,14 @@ def cross_validated_predictions(
     baseline_by_query: dict[str, float],
     feature_sets: dict[str, list[str]],
     class_weight: str | None = None,
+    class_weights: dict[str, str | None] | None = None,
     n_splits: int = CV_FOLDS,
     seed: int = 42,
 ) -> list[dict[str, Any]]:
     """Stratified K-fold out-of-fold predictions over the whole calibration set.
+
+    `class_weights` overrides `class_weight` per model, so a weighted model and its unweighted
+    ablation can be predicted on identical folds — which is what makes the two paired.
 
     The predeclared train/dev split leaves only ~20 failures to compare models on. Pooling
     out-of-fold predictions over all 809 calibration queries raises that to ~120 without
@@ -441,8 +450,9 @@ def cross_validated_predictions(
         platt = fit_raw_score_calibrator({qid: baseline_by_query[qid] for qid in train_ids}, train_labels)
         fold_scores = {"raw_score_platt": apply_raw_score_calibrator(platt, held_out_baseline)}
         for model, feature_names in feature_sets.items():
+            weight = class_weights.get(model, class_weight) if class_weights else class_weight
             calibrator = fit_calibrator(
-                train_features, train_labels, feature_names, class_weight=class_weight
+                train_features, train_labels, feature_names, class_weight=weight
             )
             fold_scores[model] = predict_proba(calibrator, held_out_features, feature_names)
 

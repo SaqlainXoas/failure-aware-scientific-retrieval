@@ -6,6 +6,7 @@ import logging
 from typing import Any
 
 from retrieval.confidence import (
+    ABLATION_MODEL,
     CV_FOLDS,
     apply_raw_score_calibrator,
     confidence_feature_names,
@@ -316,6 +317,21 @@ def run_calibration(
         estimators["calibrated_hybrid_exploratory"] = exploratory
         feature_names["calibrated_hybrid_exploratory"] = exploratory_features
 
+    # Post-hoc ablation, added after the calibration-set Brier degradation was observed: same
+    # features, same fitting split, class weighting removed, to test whether the predeclared
+    # class_weight="balanced" is what costs the model its probability quality. It is a comparison
+    # only — `primary_model` below is unchanged and the ablation stays out of the predeclared
+    # tables. Skipped when no weighting is configured, where it would duplicate the primary model.
+    ablation_models: list[str] = []
+    if class_weight is not None:
+        unweighted = fit_calibrator(
+            train_features, train_labels, primary_features, class_weight=None
+        )
+        dev_scores[ABLATION_MODEL] = predict_proba(unweighted, dev_features, primary_features)
+        estimators[ABLATION_MODEL] = unweighted
+        feature_names[ABLATION_MODEL] = primary_features
+        ablation_models.append(ABLATION_MODEL)
+
     results = {
         name: _score_model(scores, dev_labels, coverage_levels, is_probability=(name != "raw_score"))
         for name, scores in dev_scores.items()
@@ -334,6 +350,10 @@ def run_calibration(
     feature_sets = {"calibrated": primary_features}
     if exploratory_features is not None:
         feature_sets["calibrated_hybrid_exploratory"] = exploratory_features
+    # Cross-validating the ablation on the same folds as the primary model is what makes the two
+    # paired, so the bootstrap comparison between them is a like-for-like one.
+    for model in ablation_models:
+        feature_sets[model] = primary_features
     # Everything above this line is the predeclared train/dev protocol and must never see a dev
     # query during fitting. The cross-validated estimate below deliberately pools train+dev, so
     # it is computed strictly after, and kept in its own key so the two can never be confused.
@@ -345,6 +365,7 @@ def run_calibration(
             {**train_baseline, **dev_baseline},
             feature_sets,
             class_weight=class_weight,
+            class_weights={model: None for model in ablation_models},
             coverage_levels=coverage_levels,
             n_splits=n_splits,
             seed=int(config.get("seed", 42)),
@@ -357,6 +378,7 @@ def run_calibration(
         "estimators": estimators,
         "primary_model": "calibrated",
         "exploratory_models": [n for n in dev_scores if n.endswith("_exploratory")],
+        "ablation_models": ablation_models,
         "feature_names": feature_names,
         "class_weight": class_weight,
         "fit_split": FIT_SPLIT,
@@ -376,6 +398,7 @@ def run_cross_validated_confidence(
     coverage_levels: tuple[float, ...],
     n_splits: int,
     seed: int,
+    class_weights: dict[str, str | None] | None = None,
 ) -> dict[str, Any]:
     """Higher-powered secondary estimate of the raw-vs-calibrated comparison, reported
     *alongside* the predeclared train/dev result and never as a replacement for it."""
@@ -385,6 +408,7 @@ def run_cross_validated_confidence(
         baseline_by_query,
         feature_sets,
         class_weight=class_weight,
+        class_weights=class_weights,
         n_splits=n_splits,
         seed=seed,
     )
