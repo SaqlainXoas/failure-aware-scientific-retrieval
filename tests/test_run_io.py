@@ -8,7 +8,9 @@ import pytest
 import retrieval.runio as runio_module
 from retrieval.run import per_query_metrics
 from retrieval.runio import build_manifest, build_query_results, write_run_dir
+from retrieval.confidence import ABLATION_MODEL
 from retrieval.tables import (
+    EXCLUDED_FROM_PREDECLARED_TABLES,
     MODEL_ROLES,
     build_confidence_table,
     build_rerank_delta_table,
@@ -421,6 +423,12 @@ def _write_confidence_run(root, pipeline):
             "brier": 0.09,
             "n_queries": 162,
         }
+    models[ABLATION_MODEL] = {
+        "auroc": 0.79,
+        "auprc": 0.89,
+        "brier": 0.11,
+        "n_queries": 162,
+    }
     common = {
         "fit_split": "calibration-train",
         "eval_split": "calibration-dev",
@@ -452,7 +460,16 @@ def test_confidence_tables_label_roles_splits_primary_pipeline_and_provenance(
     confidence = build_confidence_table(artifacts)
     selective = build_selective_table(artifacts)
 
-    assert {row["model_role"] for row in confidence} == set(MODEL_ROLES.values())
+    expected_roles = {
+        role
+        for model, role in MODEL_ROLES.items()
+        if model not in EXCLUDED_FROM_PREDECLARED_TABLES
+    }
+    assert {row["model_role"] for row in confidence} == expected_roles
+    # The post-hoc ablation is saved in the run artifacts but must stay out of the tables the
+    # protocol fixed, which is the whole reason it is reported separately.
+    assert ABLATION_MODEL in artifacts["bm25"]["confidence"]["models"]
+    assert all(row["model"] != ABLATION_MODEL for row in confidence + selective)
     assert all(
         row["is_primary_pipeline"] == (row["pipeline"] == "hybrid_rrf")
         for row in confidence + selective
